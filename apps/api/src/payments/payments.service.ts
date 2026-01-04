@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import * as Razorpay from 'razorpay';
+import Razorpay from 'razorpay';
 import * as crypto from 'crypto';
 
 export interface CreateOrderDto {
@@ -18,7 +18,7 @@ export interface VerifySignatureDto {
 
 @Injectable()
 export class PaymentsService {
-  private razorpay: Razorpay;
+  private razorpay: any;
   private keySecret: string;
 
   constructor(private configService: ConfigService) {
@@ -66,7 +66,7 @@ export class PaymentsService {
 
     const { orderId, paymentId, signature } = dto;
     const body = `${orderId}|${paymentId}`;
-    
+
     const expectedSignature = crypto
       .createHmac('sha256', this.keySecret)
       .update(body)

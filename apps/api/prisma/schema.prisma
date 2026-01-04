@@ -49,12 +49,12 @@ model User {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  listingsCreated Listing[]     @relation("SellerListings")
-  offersMade      Offer[]       @relation("BuyerOffers")
-  offersReceived  Offer[]       @relation("SellerOffers")
-  transactions    Transaction[]
-  messagesSent    Message[]     @relation("SentMessages")
-  messagesReceived Message[]    @relation("ReceivedMessages")
+  listingsCreated  Listing[]     @relation("SellerListings")
+  offersMade       Offer[]       @relation("BuyerOffers")
+  offersReceived   Offer[]       @relation("SellerOffers")
+  transactions     Transaction[]
+  messagesSent     Message[]     @relation("SentMessages")
+  messagesReceived Message[]     @relation("ReceivedMessages")
 
   @@index([clerkId])
   @@index([email])
@@ -81,16 +81,16 @@ model Listing {
 }
 
 model Offer {
-  id         String      @id @default(cuid())
-  amount     Float
-  message    String?
-  status     OfferStatus @default(PENDING)
-  listingId  String
-  buyerId    String
-  sellerId   String
-  createdAt  DateTime    @default(now())
-  updatedAt  DateTime    @updatedAt
-  expiresAt  DateTime?
+  id        String      @id @default(cuid())
+  amount    Float
+  message   String?
+  status    OfferStatus @default(PENDING)
+  listingId String
+  buyerId   String
+  sellerId  String
+  createdAt DateTime    @default(now())
+  updatedAt DateTime    @updatedAt
+  expiresAt DateTime?
 
   listing      Listing       @relation(fields: [listingId], references: [id], onDelete: Cascade)
   buyer        User          @relation("BuyerOffers", fields: [buyerId], references: [id], onDelete: Cascade)

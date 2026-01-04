@@ -1,10 +1,10 @@
 import { Injectable, CanActivate, ExecutionContext, UnauthorizedException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import * as jwksClient from 'jwks-rsa';
+import jwksClient from 'jwks-rsa';
 
 @Injectable()
 export class ClerkAuthGuard implements CanActivate {
-  private jwksClient: jwksClient.JwksClient;
+  private jwksClient: any;
 
   constructor(private configService: ConfigService) {
     const clerkJwksUrl = this.configService.get<string>('CLERK_JWKS_URL');
