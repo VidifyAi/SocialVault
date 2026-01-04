@@ -1,0 +1,159 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum UserRole {
+  USER
+  ADMIN
+  MODERATOR
+}
+
+enum ListingStatus {
+  DRAFT
+  ACTIVE
+  SOLD
+  SUSPENDED
+  DELETED
+}
+
+enum OfferStatus {
+  PENDING
+  ACCEPTED
+  REJECTED
+  EXPIRED
+  CANCELLED
+}
+
+enum TransactionStatus {
+  PENDING
+  ESCROW
+  COMPLETED
+  REFUNDED
+  FAILED
+}
+
+enum MessageType {
+  TEXT
+  SYSTEM
+  NOTIFICATION
+}
+
+model User {
+  id         String   @id @default(cuid())
+  clerkId    String   @unique
+  email      String   @unique
+  username   String?  @unique
+  firstName  String?
+  lastName   String?
+  avatarUrl  String?
+  role       UserRole @default(USER)
+  isVerified Boolean  @default(false)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  listings           Listing[]
+  offers             Offer[]
+  sentMessages       Message[]     @relation("SentMessages")
+  receivedMessages   Message[]     @relation("ReceivedMessages")
+  buyerTransactions  Transaction[] @relation("BuyerTransactions")
+  sellerTransactions Transaction[] @relation("SellerTransactions")
+
+  @@index([clerkId])
+  @@index([email])
+}
+
+model Listing {
+  id          String        @id @default(cuid())
+  title       String
+  description String
+  platform    String
+  followers   Int?
+  price       Float
+  status      ListingStatus @default(DRAFT)
+  images      String[]
+  metadata    Json?
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+
+  sellerId     String
+  seller       User          @relation(fields: [sellerId], references: [id])
+  offers       Offer[]
+  transactions Transaction[]
+
+  @@index([sellerId])
+  @@index([status])
+  @@index([platform])
+}
+
+model Offer {
+  id        String      @id @default(cuid())
+  amount    Float
+  message   String?
+  status    OfferStatus @default(PENDING)
+  expiresAt DateTime?
+  createdAt DateTime    @default(now())
+  updatedAt DateTime    @updatedAt
+
+  listingId    String
+  listing      Listing       @relation(fields: [listingId], references: [id])
+  buyerId      String
+  buyer        User          @relation(fields: [buyerId], references: [id])
+  transactions Transaction[]
+
+  @@index([listingId])
+  @@index([buyerId])
+  @@index([status])
+}
+
+model Transaction {
+  id                String            @id @default(cuid())
+  amount            Float
+  status            TransactionStatus @default(PENDING)
+  razorpayOrderId   String?           @unique
+  razorpayPaymentId String?           @unique
+  razorpaySignature String?
+  escrowReleasedAt  DateTime?
+  refundedAt        DateTime?
+  metadata          Json?
+  createdAt         DateTime          @default(now())
+  updatedAt         DateTime          @updatedAt
+
+  listingId String
+  listing   Listing @relation(fields: [listingId], references: [id])
+  offerId   String?
+  offer     Offer?  @relation(fields: [offerId], references: [id])
+  buyerId   String
+  buyer     User    @relation("BuyerTransactions", fields: [buyerId], references: [id])
+  sellerId  String
+  seller    User    @relation("SellerTransactions", fields: [sellerId], references: [id])
+
+  @@index([buyerId])
+  @@index([sellerId])
+  @@index([listingId])
+  @@index([status])
+}
+
+model Message {
+  id        String      @id @default(cuid())
+  content   String
+  type      MessageType @default(TEXT)
+  isRead    Boolean     @default(false)
+  createdAt DateTime    @default(now())
+
+  senderId   String
+  sender     User   @relation("SentMessages", fields: [senderId], references: [id])
+  receiverId String
+  receiver   User   @relation("ReceivedMessages", fields: [receiverId], references: [id])
+
+  @@index([senderId])
+  @@index([receiverId])
+  @@index([createdAt])
+}

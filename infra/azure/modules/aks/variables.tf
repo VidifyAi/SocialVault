@@ -1,0 +1,44 @@
+variable "resource_group_name" {
+  description = "Name of the resource group"
+  type        = string
+}
+
+variable "location" {
+  description = "Azure region"
+  type        = string
+}
+
+variable "project_name" {
+  description = "Project name"
+  type        = string
+}
+
+variable "environment" {
+  description = "Environment name"
+  type        = string
+}
+
+variable "subnet_id" {
+  description = "ID of the subnet for AKS"
+  type        = string
+}
+
+variable "node_count" {
+  description = "Number of nodes"
+  type        = number
+}
+
+variable "node_vm_size" {
+  description = "VM size for nodes"
+  type        = string
+}
+
+variable "acr_id" {
+  description = "ID of the container registry"
+  type        = string
+}
+
+variable "tags" {
+  description = "Tags to apply to resources"
+  type        = map(string)
+}

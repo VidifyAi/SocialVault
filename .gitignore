@@ -1,0 +1,47 @@
+# Dependencies
+node_modules/
+.pnp.*
+.yarn/*
+!.yarn/patches
+!.yarn/plugins
+!.yarn/releases
+!.yarn/versions
+
+# Build outputs
+dist/
+build/
+out/
+.next/
+*.log
+
+# Environment
+.env
+.env*.local
+.env.production
+.env.development
+
+# IDE
+.vscode/*
+!.vscode/extensions.json
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Testing
+coverage/
+.nyc_output/
+*.test.js.snap
+
+# Prisma
+prisma/migrations/
+
+# Temp files
+*.tmp
+.cache/
+.turbo/
+.vercel/
+
+# OS
+Thumbs.db
