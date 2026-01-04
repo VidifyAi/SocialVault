@@ -1,4 +1,30 @@
 # AccountBazaar - Social Media Account Marketplace
+
+> This file is the aspirational/legacy specification. For the current implementation snapshot, see [README.current.md](README.current.md).
+
+## Project Status (2026-01-04)
+
+### What’s implemented
+- Backend: Express + Prisma on MongoDB; Clerk auth middleware; admin verify/reject listing flows; offers allowed only on active listings; new listings default to pending review/unverified; Razorpay payment hooks scaffolded; Redis client scaffolded.
+- Frontend: Next.js 14 + Tailwind + shadcn; browse and listing detail pages wired to current API shape; admin listings show seller profile links and approve/reject for pending/pending_review/unverified; sticky card overlap fixed; profile links added.
+- Tooling: ESLint present with relaxed rules (unsafe/any/dep checks off); lint passes; TS 5.9.3 in use.
+
+### Gaps vs. codebase
+- README below describes a multi-service, PostgreSQL/Redis/Elasticsearch/Kafka/K8s stack, Stripe/PayPal, NextAuth, Zustand/React Query, React Native app, AI/fraud, blockchain, and extensive DevOps—these are not implemented. Current stack is single Express service with Prisma/Mongo and a Next.js web app using Clerk.
+- Payments: Razorpay hooks exist but business flows are minimal; escrow/insurance not implemented.
+- Type safety: request bodies/queries largely untyped; many lint rules disabled.
+- Frontend: uses `<img>` instead of `next/image`; React Query/Zustand not in use despite mention in legacy spec.
+
+### Roadmap / next steps
+1) Re-enable stronger linting: turn on `no-unsafe-*`, `no-explicit-any`, hook deps; add Zod schemas/types for route bodies/queries; prefix unused vars with `_` or remove.
+2) Improve frontend perf/UX: swap `<img>` to `next/image`; tighten admin/browse data fetching with SWR/React Query; add loading/error states and pagination indicators.
+3) Payments/Escrow: complete Razorpay success/failure/refund handling; model escrow states in DB; add webhooks tests; surface payment status in UI.
+4) Auth/roles: ensure Clerk role checks on all admin routes; add UI guards; document environment vars.
+5) Deployability: add env sample updates, Docker/Turbo build steps, GitHub Actions for lint/test; consider pinning TS or upgrading `@typescript-eslint`.
+6) Documentation: replace legacy architecture sections with current stack overview once above gaps are closed; keep aspirational items in a separate “Future vision” section.
+
+> Note: The detailed document below is an aspirational/legacy spec and does not fully match the current implementation. Treat it as future vision; update as the stack evolves.
+
 ## Complete Technical Implementation Document
 
 ---

@@ -1,0 +1,65 @@
+name: Deploy to Azure
+
+on:
+  push:
+    branches:
+      - main
+
+env:
+  ACR_NAME: ${{ secrets.ACR_NAME }}
+  BACKEND_WEBAPP: ${{ secrets.BACKEND_WEBAPP }}
+  FRONTEND_WEBAPP: ${{ secrets.FRONTEND_WEBAPP }}
+  AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+  AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+  AZURE_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      contents: read
+      actions: read
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Azure Login (OIDC)
+        uses: azure/login@v1
+        with:
+          client-id: ${{ env.AZURE_CLIENT_ID }}
+          tenant-id: ${{ env.AZURE_TENANT_ID }}
+          subscription-id: ${{ env.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Set up Docker login to ACR
+        run: |
+          az acr login --name $ACR_NAME
+
+      - name: Build and push backend image
+        run: |
+          IMAGE_TAG=backend:${{ github.sha }}
+          docker build -f apps/backend/Dockerfile -t $ACR_NAME.azurecr.io/$IMAGE_TAG .
+          docker push $ACR_NAME.azurecr.io/$IMAGE_TAG
+          echo "BACKEND_IMAGE=$ACR_NAME.azurecr.io/$IMAGE_TAG" >> $GITHUB_ENV
+
+      - name: Build and push frontend image
+        run: |
+          IMAGE_TAG=frontend:${{ github.sha }}
+          docker build -f apps/frontend/Dockerfile -t $ACR_NAME.azurecr.io/$IMAGE_TAG .
+          docker push $ACR_NAME.azurecr.io/$IMAGE_TAG
+          echo "FRONTEND_IMAGE=$ACR_NAME.azurecr.io/$IMAGE_TAG" >> $GITHUB_ENV
+
+      - name: Deploy backend container
+        run: |
+          az webapp config container set \
+            --name $BACKEND_WEBAPP \
+            --resource-group ${{ secrets.AZURE_RESOURCE_GROUP }} \
+            --docker-custom-image-name $BACKEND_IMAGE \
+            --docker-registry-server-url https://$ACR_NAME.azurecr.io
+
+      - name: Deploy frontend container
+        run: |
+          az webapp config container set \
+            --name $FRONTEND_WEBAPP \
+            --resource-group ${{ secrets.AZURE_RESOURCE_GROUP }} \
+            --docker-custom-image-name $FRONTEND_IMAGE \
+            --docker-registry-server-url https://$ACR_NAME.azurecr.io
