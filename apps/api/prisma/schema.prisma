@@ -1,0 +1,146 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum UserRole {
+  BUYER
+  SELLER
+  ADMIN
+}
+
+enum ListingStatus {
+  DRAFT
+  ACTIVE
+  SOLD
+  CANCELLED
+}
+
+enum OfferStatus {
+  PENDING
+  ACCEPTED
+  REJECTED
+  EXPIRED
+}
+
+enum TransactionStatus {
+  CREATED
+  PAYMENT_PENDING
+  PAYMENT_CAPTURED
+  COMPLETED
+  REFUNDED
+  FAILED
+}
+
+model User {
+  id        String   @id @default(cuid())
+  clerkId   String   @unique
+  email     String   @unique
+  firstName String?
+  lastName  String?
+  role      UserRole @default(BUYER)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  listingsCreated Listing[]     @relation("SellerListings")
+  offersMade      Offer[]       @relation("BuyerOffers")
+  offersReceived  Offer[]       @relation("SellerOffers")
+  transactions    Transaction[]
+  messagesSent    Message[]     @relation("SentMessages")
+  messagesReceived Message[]    @relation("ReceivedMessages")
+
+  @@index([clerkId])
+  @@index([email])
+}
+
+model Listing {
+  id          String        @id @default(cuid())
+  title       String
+  description String
+  price       Float
+  platform    String
+  followers   Int?
+  status      ListingStatus @default(DRAFT)
+  sellerId    String
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+
+  seller       User          @relation("SellerListings", fields: [sellerId], references: [id], onDelete: Cascade)
+  offers       Offer[]
+  transactions Transaction[]
+
+  @@index([sellerId])
+  @@index([status])
+}
+
+model Offer {
+  id         String      @id @default(cuid())
+  amount     Float
+  message    String?
+  status     OfferStatus @default(PENDING)
+  listingId  String
+  buyerId    String
+  sellerId   String
+  createdAt  DateTime    @default(now())
+  updatedAt  DateTime    @updatedAt
+  expiresAt  DateTime?
+
+  listing      Listing       @relation(fields: [listingId], references: [id], onDelete: Cascade)
+  buyer        User          @relation("BuyerOffers", fields: [buyerId], references: [id], onDelete: Cascade)
+  seller       User          @relation("SellerOffers", fields: [sellerId], references: [id], onDelete: Cascade)
+  transactions Transaction[]
+
+  @@index([listingId])
+  @@index([buyerId])
+  @@index([sellerId])
+  @@index([status])
+}
+
+model Transaction {
+  id                String            @id @default(cuid())
+  amount            Float
+  status            TransactionStatus @default(CREATED)
+  razorpayOrderId   String?           @unique
+  razorpayPaymentId String?           @unique
+  razorpaySignature String?
+  listingId         String
+  offerId           String?
+  buyerId           String
+  createdAt         DateTime          @default(now())
+  updatedAt         DateTime          @updatedAt
+
+  listing Listing @relation(fields: [listingId], references: [id], onDelete: Cascade)
+  offer   Offer?  @relation(fields: [offerId], references: [id], onDelete: SetNull)
+  buyer   User    @relation(fields: [buyerId], references: [id], onDelete: Cascade)
+
+  @@index([listingId])
+  @@index([offerId])
+  @@index([buyerId])
+  @@index([status])
+  @@index([razorpayOrderId])
+  @@index([razorpayPaymentId])
+}
+
+model Message {
+  id         String   @id @default(cuid())
+  content    String
+  senderId   String
+  receiverId String
+  read       Boolean  @default(false)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  sender   User @relation("SentMessages", fields: [senderId], references: [id], onDelete: Cascade)
+  receiver User @relation("ReceivedMessages", fields: [receiverId], references: [id], onDelete: Cascade)
+
+  @@index([senderId])
+  @@index([receiverId])
+  @@index([createdAt])
+}
