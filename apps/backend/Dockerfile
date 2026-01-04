@@ -14,8 +14,8 @@ COPY package.json pnpm-lock.yaml pnpm-workspace.yaml turbo.json ./
 # Copy backend workspace
 COPY apps/backend/package.json apps/backend/tsconfig.json apps/backend/prisma/schema.prisma apps/backend/prisma/seed.ts apps/backend/ ./apps/backend/
 
-# Copy shared types (sources + config) so workspace builds in-container
-COPY packages/types/package.json packages/types/tsconfig.json packages/types/src/ ./packages/types/
+# Copy shared types (everything) so workspace builds in-container
+COPY packages/types ./packages/types
 
 # Install deps (workspace-wide)
 RUN pnpm install --recursive
