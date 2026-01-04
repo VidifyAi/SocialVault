@@ -14,14 +14,17 @@ COPY package.json pnpm-lock.yaml pnpm-workspace.yaml turbo.json ./
 # Copy backend workspace
 COPY apps/backend/package.json apps/backend/tsconfig.json apps/backend/prisma/schema.prisma apps/backend/prisma/seed.ts apps/backend/ ./apps/backend/
 
-# Copy shared types
-COPY packages/types/package.json ./packages/types/
+# Copy shared types (sources + config) so workspace builds in-container
+COPY packages/types/package.json packages/types/tsconfig.json packages/types/src/ ./packages/types/
 
 # Install deps (workspace-wide)
 RUN pnpm install --recursive
 
-# Build backend
-RUN pnpm --filter @socialswapr/backend run build
+# Build shared types then generate Prisma client and build backend
+ENV DATABASE_URL="mongodb://placeholder:27017/dev"
+RUN pnpm --filter @socialswapr/types run build \
+	&& pnpm --filter @socialswapr/backend exec prisma generate \
+	&& pnpm --filter @socialswapr/backend run build
 
 # Runtime env
 ENV NODE_ENV=production
