@@ -22,7 +22,8 @@ RUN pnpm install --recursive
 
 # Build shared types then generate Prisma client and build backend
 ENV DATABASE_URL="mongodb://placeholder:27017/dev"
-RUN pnpm --filter @socialswapr/types run build \
+RUN ls -R packages/types \
+	&& pnpm --filter @socialswapr/types run build \
 	&& pnpm --filter @socialswapr/backend exec prisma generate \
 	&& pnpm --filter @socialswapr/backend run build
 
