@@ -26,7 +26,7 @@ export function errorHandler(
 
   // Handle Prisma errors
   if (err.name === 'PrismaClientKnownRequestError') {
-    const prismaError = err as { code: string; meta?: { target?: string[] } };
+    const prismaError = err as unknown as { code: string; meta?: { target?: string[] } };
     
     if (prismaError.code === 'P2002') {
       const field = prismaError.meta?.target?.[0] || 'field';
@@ -73,7 +73,7 @@ export function errorHandler(
 
   // Handle validation errors from Zod
   if (err.name === 'ZodError') {
-    const zodError = err as { errors: { path: string[]; message: string }[] };
+    const zodError = err as unknown as { errors: { path: string[]; message: string }[] };
     const details: Record<string, string[]> = {};
     
     zodError.errors.forEach((e) => {

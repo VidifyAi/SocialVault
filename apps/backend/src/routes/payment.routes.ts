@@ -1,15 +1,15 @@
 // Payment Routes (Razorpay)
 // Handles payment creation, verification, and webhooks
 
-import { Router } from 'express';
+import { Router, Response } from 'express';
 import { paymentService } from '../services/payment.service';
-import { authenticate } from '../middleware/auth';
+import { authenticate, AuthenticatedRequest } from '../middleware/auth';
 import { prisma } from '../lib/prisma';
 
-const router = Router();
+const router: Router = Router();
 
 // POST /payments/create-order - Create Razorpay order
-router.post('/create-order', authenticate, async (req, res) => {
+router.post('/create-order', authenticate, async (req: AuthenticatedRequest, res: Response) => {
   try {
     const { transactionId } = req.body;
 
@@ -78,7 +78,7 @@ router.post('/create-order', authenticate, async (req, res) => {
 });
 
 // POST /payments/verify - Verify payment after completion
-router.post('/verify', authenticate, async (req, res) => {
+router.post('/verify', authenticate, async (req: AuthenticatedRequest, res: Response) => {
   try {
     const { 
       transactionId,
@@ -117,7 +117,7 @@ router.post('/verify', authenticate, async (req, res) => {
 });
 
 // GET /payments/:transactionId/status - Get payment status
-router.get('/:transactionId/status', authenticate, async (req, res) => {
+router.get('/:transactionId/status', authenticate, async (req: AuthenticatedRequest, res: Response) => {
   try {
     const transaction = await prisma.transaction.findUnique({
       where: { id: req.params.transactionId },
@@ -155,7 +155,7 @@ router.get('/:transactionId/status', authenticate, async (req, res) => {
 });
 
 // POST /payments/webhook - Razorpay webhook handler
-router.post('/webhook', async (req, res) => {
+router.post('/webhook', async (req, res: Response) => {
   try {
     const signature = req.headers['x-razorpay-signature'] as string;
 
@@ -176,7 +176,7 @@ router.post('/webhook', async (req, res) => {
 });
 
 // POST /payments/:transactionId/release - Buyer confirms transfer, request escrow release
-router.post('/:transactionId/release', authenticate, async (req, res) => {
+router.post('/:transactionId/release', authenticate, async (req: AuthenticatedRequest, res: Response) => {
   try {
     const { transactionId } = req.params;
 

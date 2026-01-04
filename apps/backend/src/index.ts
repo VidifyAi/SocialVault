@@ -1,4 +1,4 @@
-import express from 'express';
+import express, { Express } from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
 import rateLimit from 'express-rate-limit';
@@ -19,7 +19,7 @@ import { uploadRouter } from './routes/upload.routes';
 import { setupWebSocket } from './websocket';
 import { prisma } from './lib/prisma';
 
-const app = express();
+const app: Express = express();
 const httpServer = createServer(app);
 
 // Socket.io setup

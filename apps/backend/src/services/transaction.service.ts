@@ -1,7 +1,8 @@
 import { prisma } from '../lib/prisma';
 import { config } from '../config';
 import { NotFoundError, ForbiddenError, BadRequestError } from '../utils/errors';
-import { TransactionStatus, EscrowStatus, Prisma } from '@prisma/client';
+import { Prisma } from '@prisma/client';
+import { TransactionStatus, EscrowStatus } from '@socialswapr/types';
 
 // Platform-specific transfer steps
 const TRANSFER_STEPS = {
@@ -355,7 +356,7 @@ export class TransactionService {
         platformFee,
         sellerPayout,
         currency: listing.currency,
-        transferProgress: transferSteps as unknown as Prisma.JsonArray,
+        transferProgress: transferSteps as unknown as Prisma.JsonValue[],
         status: 'initiated',
       },
       include: {
@@ -489,7 +490,7 @@ export class TransactionService {
     }
 
     // Validate status transition
-    this.validateStatusTransition(transaction.status, status);
+    this.validateStatusTransition(transaction.status as TransactionStatus, status);
 
     const updates: Prisma.TransactionUpdateInput = { status };
 
@@ -556,7 +557,7 @@ export class TransactionService {
     }
 
     const updates: Prisma.TransactionUpdateInput = {
-      transferProgress: transferProgress as unknown as Prisma.JsonArray,
+      transferProgress: transferProgress as unknown as Prisma.JsonValue[],
       currentStep: stepNumber + 1,
     };
 
@@ -619,7 +620,7 @@ export class TransactionService {
       'payment_processing',
     ];
 
-    if (!cancelableStatuses.includes(transaction.status)) {
+    if (!cancelableStatuses.includes(transaction.status as TransactionStatus)) {
       throw new BadRequestError('This transaction cannot be cancelled at this stage');
     }
 

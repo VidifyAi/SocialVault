@@ -5,7 +5,7 @@ import { validate } from '../middleware/validate';
 import { updateProfileSchema } from '../validators/schemas';
 import { NotFoundError } from '../utils/errors';
 
-const router = Router();
+const router: Router = Router();
 
 // GET /users/profile - Get current user's full profile
 router.get(
@@ -28,8 +28,6 @@ router.get(
           kycVerifiedAt: true,
           status: true,
           trustScore: true,
-          emailVerified: true,
-          twoFactorEnabled: true,
           stripeCustomerId: true,
           stripeConnectId: true,
           createdAt: true,

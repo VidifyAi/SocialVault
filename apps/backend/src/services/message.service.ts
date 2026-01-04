@@ -130,8 +130,6 @@ export class MessageService {
       warning: filterResult.flagged ? getWarningMessage(filterResult) : undefined,
       flagged: filterResult.flagged,
     };
-
-    return message;
   }
 
   async getConversations(userId: string) {

@@ -4,7 +4,7 @@ import { validate } from '../middleware/validate';
 import { authenticate, AuthenticatedRequest } from '../middleware/auth';
 import { createOfferSchema, offerResponseSchema } from '../validators/schemas';
 
-const router = Router();
+const router: Router = Router();
 
 // GET /offers - Get my offers
 router.get(

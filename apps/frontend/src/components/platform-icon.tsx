@@ -69,11 +69,12 @@ export function PlatformIcon({
   const Icon = config.icon;
 
   return (
-    <Icon
-      className={cn(className)}
-      size={size}
+    <span
+      className={cn('inline-flex', className)}
       style={{ color: colored ? config.color : 'currentColor' }}
-    />
+    >
+      <Icon size={size} />
+    </span>
   );
 }
 

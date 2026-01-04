@@ -14,7 +14,7 @@ import {
   listingQuerySchema 
 } from '../validators/schemas';
 
-const router = Router();
+const router: Router = Router();
 
 // Configure multer for memory storage (for image uploads)
 const upload = multer({

@@ -7,7 +7,7 @@ import {
   updateTransferStepSchema 
 } from '../validators/schemas';
 
-const router = Router();
+const router: Router = Router();
 
 // GET /transactions - Get my transactions
 router.get(

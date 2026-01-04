@@ -1,12 +1,12 @@
 // Admin Routes
 // Protected routes for admin operations
 
-import { Router } from 'express';
+import { Router, Response } from 'express';
 import { adminService } from '../services/admin.service';
 import { messageService } from '../services/message.service';
-import { authenticate, authorize } from '../middleware/auth';
+import { authenticate, authorize, AuthenticatedRequest } from '../middleware/auth';
 
-const router = Router();
+const router: Router = Router();
 
 // All admin routes require authentication and admin role
 router.use(authenticate);
@@ -15,7 +15,7 @@ router.use(authorize('admin'));
 // ==================== DASHBOARD ====================
 
 // GET /admin/dashboard - Get dashboard statistics
-router.get('/dashboard', async (req, res) => {
+router.get('/dashboard', async (req: AuthenticatedRequest, res: Response) => {
   try {
     const stats = await adminService.getDashboardStats();
     res.json({ success: true, data: stats });
@@ -28,7 +28,7 @@ router.get('/dashboard', async (req, res) => {
 // ==================== FLAGGED MESSAGES ====================
 
 // GET /admin/messages/flagged - Get flagged messages
-router.get('/messages/flagged', async (req, res) => {
+router.get('/messages/flagged', async (req: AuthenticatedRequest, res: Response) => {
   try {
     const { page, limit, severity } = req.query;
     const result = await messageService.getFlaggedMessages({
@@ -44,7 +44,7 @@ router.get('/messages/flagged', async (req, res) => {
 });
 
 // GET /admin/messages/flagged/stats - Get flagged message statistics
-router.get('/messages/flagged/stats', async (req, res) => {
+router.get('/messages/flagged/stats', async (req: AuthenticatedRequest, res: Response) => {
   try {
     const stats = await messageService.getFlaggedStats();
     res.json({ success: true, data: stats });
@@ -57,7 +57,7 @@ router.get('/messages/flagged/stats', async (req, res) => {
 // ==================== USER MANAGEMENT ====================
 
 // GET /admin/users - List all users with filters
-router.get('/users', async (req, res) => {
+router.get('/users', async (req: AuthenticatedRequest, res: Response) => {
   try {
     const { page, limit, status, role, kycStatus } = req.query;
     const result = await adminService.getUsers({
@@ -75,7 +75,7 @@ router.get('/users', async (req, res) => {
 });
 
 // GET /admin/users/:id - Get user details
-router.get('/users/:id', async (req, res) => {
+router.get('/users/:id', async (req: AuthenticatedRequest, res: Response) => {
   try {
     const user = await adminService.getUserDetails(req.params.id);
     if (!user) {
@@ -89,7 +89,7 @@ router.get('/users/:id', async (req, res) => {
 });
 
 // PATCH /admin/users/:id/status - Update user status
-router.patch('/users/:id/status', async (req, res) => {
+router.patch('/users/:id/status', async (req: AuthenticatedRequest, res: Response) => {
   try {
     const { status, reason } = req.body;
     const user = await adminService.updateUserStatus(
@@ -106,7 +106,7 @@ router.patch('/users/:id/status', async (req, res) => {
 });
 
 // PATCH /admin/users/:id/role - Update user role
-router.patch('/users/:id/role', async (req, res) => {
+router.patch('/users/:id/role', async (req: AuthenticatedRequest, res: Response) => {
   try {
     const { role } = req.body;
     const user = await adminService.updateUserRole(
@@ -124,7 +124,7 @@ router.patch('/users/:id/role', async (req, res) => {
 // ==================== LISTING MANAGEMENT ====================
 
 // GET /admin/listings - List all listings with filters
-router.get('/listings', async (req, res) => {
+router.get('/listings', async (req: AuthenticatedRequest, res: Response) => {
   try {
     const { page, limit, status, verificationStatus, platform } = req.query;
     const result = await adminService.getListings({
@@ -142,7 +142,7 @@ router.get('/listings', async (req, res) => {
 });
 
 // POST /admin/listings/:id/verify - Verify a listing
-router.post('/listings/:id/verify', async (req, res) => {
+router.post('/listings/:id/verify', async (req: AuthenticatedRequest, res: Response) => {
   try {
     const listing = await adminService.verifyListing(req.params.id, req.user!.id);
     res.json({ success: true, data: listing });
@@ -153,7 +153,7 @@ router.post('/listings/:id/verify', async (req, res) => {
 });
 
 // POST /admin/listings/:id/reject - Reject a listing
-router.post('/listings/:id/reject', async (req, res) => {
+router.post('/listings/:id/reject', async (req: AuthenticatedRequest, res: Response) => {
   try {
     const { reason } = req.body;
     if (!reason) {
@@ -168,7 +168,7 @@ router.post('/listings/:id/reject', async (req, res) => {
 });
 
 // POST /admin/listings/:id/suspend - Suspend a listing
-router.post('/listings/:id/suspend', async (req, res) => {
+router.post('/listings/:id/suspend', async (req: AuthenticatedRequest, res: Response) => {
   try {
     const { reason } = req.body;
     if (!reason) {
@@ -185,7 +185,7 @@ router.post('/listings/:id/suspend', async (req, res) => {
 // ==================== TRANSACTION MANAGEMENT ====================
 
 // GET /admin/transactions - List all transactions with filters
-router.get('/transactions', async (req, res) => {
+router.get('/transactions', async (req: AuthenticatedRequest, res: Response) => {
   try {
     const { page, limit, status, escrowStatus } = req.query;
     const result = await adminService.getTransactions({
@@ -202,7 +202,7 @@ router.get('/transactions', async (req, res) => {
 });
 
 // GET /admin/transactions/:id - Get transaction details
-router.get('/transactions/:id', async (req, res) => {
+router.get('/transactions/:id', async (req: AuthenticatedRequest, res: Response) => {
   try {
     const transaction = await adminService.getTransactionDetails(req.params.id);
     if (!transaction) {
@@ -216,7 +216,7 @@ router.get('/transactions/:id', async (req, res) => {
 });
 
 // POST /admin/transactions/:id/release-escrow - Release escrow to seller
-router.post('/transactions/:id/release-escrow', async (req, res) => {
+router.post('/transactions/:id/release-escrow', async (req: AuthenticatedRequest, res: Response) => {
   try {
     const transaction = await adminService.releaseEscrow(req.params.id, req.user!.id);
     res.json({ success: true, data: transaction });
@@ -227,7 +227,7 @@ router.post('/transactions/:id/release-escrow', async (req, res) => {
 });
 
 // POST /admin/transactions/:id/refund - Refund transaction
-router.post('/transactions/:id/refund', async (req, res) => {
+router.post('/transactions/:id/refund', async (req: AuthenticatedRequest, res: Response) => {
   try {
     const { reason } = req.body;
     if (!reason) {
@@ -244,7 +244,7 @@ router.post('/transactions/:id/refund', async (req, res) => {
 // ==================== DISPUTE MANAGEMENT ====================
 
 // GET /admin/disputes - List all disputes with filters
-router.get('/disputes', async (req, res) => {
+router.get('/disputes', async (req: AuthenticatedRequest, res: Response) => {
   try {
     const { page, limit, status } = req.query;
     const result = await adminService.getDisputes({
@@ -260,7 +260,7 @@ router.get('/disputes', async (req, res) => {
 });
 
 // GET /admin/disputes/:id - Get dispute details
-router.get('/disputes/:id', async (req, res) => {
+router.get('/disputes/:id', async (req: AuthenticatedRequest, res: Response) => {
   try {
     const dispute = await adminService.getDisputeDetails(req.params.id);
     if (!dispute) {
@@ -274,7 +274,7 @@ router.get('/disputes/:id', async (req, res) => {
 });
 
 // POST /admin/disputes/:id/resolve - Resolve a dispute
-router.post('/disputes/:id/resolve', async (req, res) => {
+router.post('/disputes/:id/resolve', async (req: AuthenticatedRequest, res: Response) => {
   try {
     const { resolution, notes } = req.body;
     if (!resolution || !notes) {
@@ -299,7 +299,7 @@ router.post('/disputes/:id/resolve', async (req, res) => {
 // ==================== AUDIT LOGS ====================
 
 // GET /admin/audit-logs - Get audit logs
-router.get('/audit-logs', async (req, res) => {
+router.get('/audit-logs', async (req: AuthenticatedRequest, res: Response) => {
   try {
     const { page, limit, userId, action } = req.query;
     const result = await adminService.getAuditLogs({

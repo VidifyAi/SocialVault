@@ -4,7 +4,7 @@ import { validate } from '../middleware/validate';
 import { authenticate, AuthenticatedRequest } from '../middleware/auth';
 import { sendMessageSchema } from '../validators/schemas';
 
-const router = Router();
+const router: Router = Router();
 
 // GET /messages/conversations - Get all conversations
 router.get(

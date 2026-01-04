@@ -10,6 +10,7 @@ const clerkClient = createClerkClient({ secretKey: config.clerkSecretKey });
 export interface AuthenticatedRequest extends Request {
   user?: {
     clerkId: string;
+    id: string;
     userId: string;
     email: string;
     role: string;
@@ -74,6 +75,7 @@ export async function authenticate(
 
     req.user = {
       clerkId: user.clerkId,
+      id: user.id,
       userId: user.id,
       email: user.email,
       role: user.role,
@@ -104,25 +106,27 @@ export async function optionalAuth(
     }
 
     const token = authHeader.substring(7);
-    
     const payload = await verifyToken(token, {
       secretKey: config.clerkSecretKey,
     });
 
-    if (payload && payload.sub) {
-      const user = await prisma.user.findUnique({
-        where: { clerkId: payload.sub },
-        select: { id: true, clerkId: true, email: true, role: true, status: true },
-      });
+    if (!payload || !payload.sub) {
+      return next();
+    }
 
-      if (user && user.status === 'active') {
-        req.user = {
-          clerkId: user.clerkId,
-          userId: user.id,
-          email: user.email,
-          role: user.role,
-        };
-      }
+    const user = await prisma.user.findUnique({
+      where: { clerkId: payload.sub },
+      select: { id: true, clerkId: true, email: true, role: true, status: true },
+    });
+
+    if (user && user.status === 'active') {
+      req.user = {
+        clerkId: user.clerkId,
+        id: user.id,
+        userId: user.id,
+        email: user.email,
+        role: user.role,
+      };
     }
 
     next();

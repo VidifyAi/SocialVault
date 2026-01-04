@@ -1,10 +1,10 @@
-import { Router } from 'express';
+import { Router, Response, NextFunction } from 'express';
 import { prisma } from '../lib/prisma';
-import { authenticate } from '../middleware/auth';
+import { authenticate, AuthenticatedRequest } from '../middleware/auth';
 import { validate } from '../middleware/validate';
 import { z } from 'zod';
 
-const router = Router();
+const router: Router = Router();
 
 const createReviewSchema = z.object({
   transactionId: z.string().uuid(),
@@ -13,7 +13,7 @@ const createReviewSchema = z.object({
 });
 
 // Create a review
-router.post('/', authenticate, validate(createReviewSchema), async (req, res, next) => {
+router.post('/', authenticate, validate(createReviewSchema), async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
   try {
     const { transactionId, rating, comment } = req.body;
     const userId = req.user!.id;
@@ -60,7 +60,8 @@ router.post('/', authenticate, validate(createReviewSchema), async (req, res, ne
         reviewerId: userId,
         revieweeId,
         rating,
-        comment,
+        content: comment || '',
+        title: null,
       },
       include: {
         reviewer: {
@@ -76,7 +77,7 @@ router.post('/', authenticate, validate(createReviewSchema), async (req, res, ne
 });
 
 // Get reviews for a user
-router.get('/user/:userId', async (req, res, next) => {
+router.get('/user/:userId', async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
   try {
     const { userId } = req.params;
     const page = parseInt(req.query.page as string) || 1;
@@ -93,7 +94,7 @@ router.get('/user/:userId', async (req, res, next) => {
           transaction: {
             include: {
               listing: {
-                select: { id: true, title: true, platform: true },
+                select: { id: true, displayName: true, username: true, platform: true },
               },
             },
           },

@@ -1,13 +1,13 @@
 // Upload Routes
 // Handles file uploads for listings, transactions, disputes, etc.
 
-import { Router } from 'express';
+import { Router, Response } from 'express';
 import multer from 'multer';
 import { uploadService } from '../services/upload.service';
-import { authenticate } from '../middleware/auth';
+import { authenticate, AuthenticatedRequest } from '../middleware/auth';
 import { prisma } from '../lib/prisma';
 
-const router = Router();
+const router: Router = Router();
 
 // Configure multer for memory storage
 const upload = multer({
@@ -39,7 +39,7 @@ const upload = multer({
 router.use(authenticate);
 
 // POST /uploads/listing/:listingId/screenshots - Upload listing screenshots
-router.post('/listing/:listingId/screenshots', upload.array('files', 10), async (req, res) => {
+router.post('/listing/:listingId/screenshots', upload.array('files', 10), async (req: AuthenticatedRequest, res: Response) => {
   try {
     const { listingId } = req.params;
     const files = req.files as Express.Multer.File[];
@@ -57,7 +57,7 @@ router.post('/listing/:listingId/screenshots', upload.array('files', 10), async 
       return res.status(404).json({ success: false, error: 'Listing not found' });
     }
 
-    if (listing.sellerId !== req.user!.id) {
+    if (listing.sellerId !== req.user!.userId) {
       return res.status(403).json({ success: false, error: 'Not authorized' });
     }
 
@@ -101,7 +101,7 @@ router.post('/listing/:listingId/screenshots', upload.array('files', 10), async 
 });
 
 // POST /uploads/listing/:listingId/verification - Upload verification proof
-router.post('/listing/:listingId/verification', upload.array('files', 5), async (req, res) => {
+router.post('/listing/:listingId/verification', upload.array('files', 5), async (req: AuthenticatedRequest, res: Response) => {
   try {
     const { listingId } = req.params;
     const files = req.files as Express.Multer.File[];
@@ -119,7 +119,7 @@ router.post('/listing/:listingId/verification', upload.array('files', 5), async 
       return res.status(404).json({ success: false, error: 'Listing not found' });
     }
 
-    if (listing.sellerId !== req.user!.id) {
+    if (listing.sellerId !== req.user!.userId) {
       return res.status(403).json({ success: false, error: 'Not authorized' });
     }
 
@@ -164,7 +164,7 @@ router.post('/listing/:listingId/verification', upload.array('files', 5), async 
 });
 
 // POST /uploads/transaction/:transactionId/transfer-proof - Upload transfer step proof
-router.post('/transaction/:transactionId/transfer-proof', upload.single('file'), async (req, res) => {
+router.post('/transaction/:transactionId/transfer-proof', upload.single('file'), async (req: AuthenticatedRequest, res: Response) => {
   try {
     const { transactionId } = req.params;
     const { stepNumber } = req.body;
@@ -187,7 +187,7 @@ router.post('/transaction/:transactionId/transfer-proof', upload.single('file'),
       return res.status(404).json({ success: false, error: 'Transaction not found' });
     }
 
-    if (transaction.buyerId !== req.user!.id && transaction.sellerId !== req.user!.id) {
+    if (transaction.buyerId !== req.user!.userId && transaction.sellerId !== req.user!.userId) {
       return res.status(403).json({ success: false, error: 'Not authorized' });
     }
 
@@ -209,14 +209,14 @@ router.post('/transaction/:transactionId/transfer-proof', upload.single('file'),
         ...transferProgress[stepIndex],
         proofUrl: result.url,
         completedAt: new Date(),
-        completedBy: req.user!.id,
+        completedBy: req.user!.userId,
       };
     } else {
       transferProgress.push({
         step: parseInt(stepNumber),
         proofUrl: result.url,
         completedAt: new Date(),
-        completedBy: req.user!.id,
+        completedBy: req.user!.userId,
       });
     }
 
@@ -243,7 +243,7 @@ router.post('/transaction/:transactionId/transfer-proof', upload.single('file'),
 });
 
 // POST /uploads/dispute/:disputeId/evidence - Upload dispute evidence
-router.post('/dispute/:disputeId/evidence', upload.array('files', 10), async (req, res) => {
+router.post('/dispute/:disputeId/evidence', upload.array('files', 10), async (req: AuthenticatedRequest, res: Response) => {
   try {
     const { disputeId } = req.params;
     const files = req.files as Express.Multer.File[];
@@ -264,8 +264,8 @@ router.post('/dispute/:disputeId/evidence', upload.array('files', 10), async (re
 
     // Allow both buyer and seller to upload evidence
     if (
-      dispute.transaction.buyerId !== req.user!.id &&
-      dispute.transaction.sellerId !== req.user!.id
+      dispute.transaction.buyerId !== req.user!.userId &&
+      dispute.transaction.sellerId !== req.user!.userId
     ) {
       return res.status(403).json({ success: false, error: 'Not authorized' });
     }
@@ -310,7 +310,7 @@ router.post('/dispute/:disputeId/evidence', upload.array('files', 10), async (re
 });
 
 // POST /uploads/message/:conversationId/attachment - Upload message attachment
-router.post('/message/:conversationId/attachment', upload.single('file'), async (req, res) => {
+router.post('/message/:conversationId/attachment', upload.single('file'), async (req: AuthenticatedRequest, res: Response) => {
   try {
     const { conversationId } = req.params;
     const file = req.file;
@@ -324,7 +324,7 @@ router.post('/message/:conversationId/attachment', upload.single('file'), async 
       where: {
         conversationId_userId: {
           conversationId,
-          userId: req.user!.id,
+          userId: req.user!.userId,
         },
       },
     });
@@ -357,7 +357,7 @@ router.post('/message/:conversationId/attachment', upload.single('file'), async 
 });
 
 // POST /uploads/avatar - Upload user avatar
-router.post('/avatar', upload.single('file'), async (req, res) => {
+router.post('/avatar', upload.single('file'), async (req: AuthenticatedRequest, res: Response) => {
   try {
     const file = req.file;
 
@@ -370,12 +370,12 @@ router.post('/avatar', upload.single('file'), async (req, res) => {
       file.buffer,
       file.originalname,
       file.mimetype,
-      req.user!.id
+      req.user!.userId
     );
 
     // Update user avatar
     await prisma.user.update({
-      where: { id: req.user!.id },
+      where: { id: req.user!.userId },
       data: { avatarUrl: result.url },
     });
 
@@ -392,7 +392,7 @@ router.post('/avatar', upload.single('file'), async (req, res) => {
 });
 
 // POST /uploads/presign - Get presigned URL for client-side upload
-router.post('/presign', async (req, res) => {
+router.post('/presign', async (req: AuthenticatedRequest, res: Response) => {
   try {
     const { folder, filename, contentType } = req.body;
 
@@ -416,7 +416,7 @@ router.post('/presign', async (req, res) => {
 });
 
 // DELETE /uploads - Delete a file
-router.delete('/', async (req, res) => {
+router.delete('/', async (req: AuthenticatedRequest, res: Response) => {
   try {
     const { key } = req.body;
 
