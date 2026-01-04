@@ -1,0 +1,29 @@
+{
+  "name": "socialswapr",
+  "version": "1.0.0",
+  "private": true,
+  "packageManager": "pnpm@9.15.4",
+  "description": "Social Media Account Marketplace",
+  "workspaces": [
+    "packages/*",
+    "apps/*"
+  ],
+  "scripts": {
+    "dev": "turbo run dev",
+    "build": "turbo run build",
+    "start": "turbo run start",
+    "lint": "turbo run lint",
+    "test": "turbo run test",
+    "db:migrate": "npm run migrate --workspace=@socialswapr/backend",
+    "db:seed": "npm run seed --workspace=@socialswapr/backend",
+    "docker:up": "docker-compose up -d",
+    "docker:down": "docker-compose down"
+  },
+  "devDependencies": {
+    "turbo": "^2.0.0",
+    "typescript": "^5.3.3"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}

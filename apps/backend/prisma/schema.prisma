@@ -1,0 +1,338 @@
+// Prisma Schema for SocialSwapr
+// Social Media Account Marketplace (MongoDB - No Docker Required)
+// Use MongoDB Atlas free tier: https://www.mongodb.com/cloud/atlas
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mongodb"
+  url      = env("DATABASE_URL")
+}
+
+// ==================== USER MODELS ====================
+
+model User {
+  id                String    @id @default(auto()) @map("_id") @db.ObjectId
+  clerkId           String    @unique @map("clerk_id")
+  email             String    @unique
+  username          String    @unique
+  role              String    @default("buyer")
+  firstName         String?   @map("first_name")
+  lastName          String?   @map("last_name")
+  avatarUrl         String?   @map("avatar_url")
+  bio               String?
+  
+  // KYC & Verification
+  kycStatus         String    @default("not_started") @map("kyc_status")
+  kycVerifiedAt     DateTime? @map("kyc_verified_at")
+  kycDocumentId     String?   @map("kyc_document_id")
+  
+  // Account Status
+  status            String    @default("active")
+  trustScore        Float     @default(5.0) @map("trust_score")
+  
+  // Payment
+  stripeCustomerId  String?   @map("stripe_customer_id")
+  stripeConnectId   String?   @map("stripe_connect_id")
+  
+  // Activity
+  lastLoginAt       DateTime? @map("last_login_at")
+  lastLoginIp       String?   @map("last_login_ip")
+  
+  createdAt         DateTime  @default(now()) @map("created_at")
+  updatedAt         DateTime  @updatedAt @map("updated_at")
+
+  // Relations
+  listings          Listing[]
+  purchasedTransactions Transaction[] @relation("BuyerTransactions")
+  soldTransactions  Transaction[]     @relation("SellerTransactions")
+  sentOffers        Offer[]           @relation("BuyerOffers")
+  receivedOffers    Offer[]           @relation("SellerOffers")
+  conversations     ConversationParticipant[]
+  sentMessages      Message[]
+  reviewsGiven      Review[]          @relation("ReviewerReviews")
+  reviewsReceived   Review[]          @relation("RevieweeReviews")
+  notifications     Notification[]
+  initiatedDisputes Dispute[]
+  favorites         Favorite[]
+  auditLogs         AuditLog[]
+
+  @@map("users")
+}
+
+// ==================== LISTING MODELS ====================
+
+model Listing {
+  id                  String    @id @default(auto()) @map("_id") @db.ObjectId
+  sellerId            String    @map("seller_id") @db.ObjectId
+  platform            String
+  username            String
+  displayName         String?   @map("display_name")
+  status              String    @default("draft")
+  verificationStatus  String    @default("unverified") @map("verification_status")
+  accountType         String    @default("personal") @map("account_type")
+  niche               String
+  description         String
+  
+  // Metrics (stored as embedded document for MongoDB)
+  metrics             Json
+  demographics        Json?
+  
+  // Monetization
+  isMonetized         Boolean   @default(false) @map("is_monetized")
+  monthlyRevenue      Float?    @map("monthly_revenue")
+  
+  // Pricing
+  price               Float
+  currency            String    @default("USD")
+  negotiable          Boolean   @default(true)
+  
+  // Account Details
+  includesEmail       Boolean   @default(false) @map("includes_email")
+  includesOriginalEmail Boolean @default(false) @map("includes_original_email")
+  accountAge          Int       @map("account_age")
+  
+  // Media (arrays work natively in MongoDB)
+  screenshots         String[]  @default([])
+  verificationProof   String[]  @default([]) @map("verification_proof")
+  
+  // Stats
+  views               Int       @default(0)
+  favoritesCount      Int       @default(0) @map("favorites_count")
+  
+  expiresAt           DateTime? @map("expires_at")
+  createdAt           DateTime  @default(now()) @map("created_at")
+  updatedAt           DateTime  @updatedAt @map("updated_at")
+
+  // Relations
+  seller              User          @relation(fields: [sellerId], references: [id])
+  transactions        Transaction[]
+  offers              Offer[]
+  conversations       Conversation[]
+  favorites           Favorite[]
+
+  @@map("listings")
+}
+
+model Favorite {
+  id        String   @id @default(auto()) @map("_id") @db.ObjectId
+  userId    String   @map("user_id") @db.ObjectId
+  listingId String   @map("listing_id") @db.ObjectId
+  createdAt DateTime @default(now()) @map("created_at")
+
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  listing   Listing  @relation(fields: [listingId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, listingId])
+  @@map("favorites")
+}
+
+// ==================== TRANSACTION MODELS ====================
+
+model Transaction {
+  id                    String   @id @default(auto()) @map("_id") @db.ObjectId
+  listingId             String   @map("listing_id") @db.ObjectId
+  buyerId               String   @map("buyer_id") @db.ObjectId
+  sellerId              String   @map("seller_id") @db.ObjectId
+  
+  // Status
+  status                String   @default("initiated")
+  escrowStatus          String   @default("pending") @map("escrow_status")
+  paymentStatus         String   @default("pending") @map("payment_status")
+  
+  // Financial
+  amount                Float
+  platformFee           Float    @map("platform_fee")
+  sellerPayout          Float    @map("seller_payout")
+  currency              String   @default("INR")
+  
+  // Razorpay
+  razorpayOrderId       String?  @map("razorpay_order_id")
+  razorpayPaymentId     String?  @map("razorpay_payment_id")
+  razorpaySignature     String?  @map("razorpay_signature")
+  razorpayRefundId      String?  @map("razorpay_refund_id")
+  
+  // Transfer Progress (stored as embedded array for MongoDB)
+  transferProgress      Json     @default("[]") @map("transfer_progress")
+  currentStep           Int      @default(0) @map("current_step")
+  
+  completedAt           DateTime? @map("completed_at")
+  createdAt             DateTime  @default(now()) @map("created_at")
+  updatedAt             DateTime  @updatedAt @map("updated_at")
+
+  // Relations
+  listing               Listing       @relation(fields: [listingId], references: [id])
+  buyer                 User          @relation("BuyerTransactions", fields: [buyerId], references: [id])
+  seller                User          @relation("SellerTransactions", fields: [sellerId], references: [id])
+  conversation          Conversation?
+  reviews               Review[]
+  dispute               Dispute?
+
+  @@map("transactions")
+}
+
+// ==================== OFFER MODELS ====================
+
+model Offer {
+  id             String   @id @default(auto()) @map("_id") @db.ObjectId
+  listingId      String   @map("listing_id") @db.ObjectId
+  buyerId        String   @map("buyer_id") @db.ObjectId
+  sellerId       String   @map("seller_id") @db.ObjectId
+  amount         Float
+  currency       String   @default("USD")
+  message        String?
+  status         String   @default("pending")
+  expiresAt      DateTime @map("expires_at")
+  counterOfferId String?  @map("counter_offer_id") @db.ObjectId
+  
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  listing        Listing  @relation(fields: [listingId], references: [id])
+  buyer          User     @relation("BuyerOffers", fields: [buyerId], references: [id])
+  seller         User     @relation("SellerOffers", fields: [sellerId], references: [id])
+  counterOffer   Offer?   @relation("CounterOffers", fields: [counterOfferId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  counterOffers  Offer[]  @relation("CounterOffers")
+
+  @@map("offers")
+}
+
+// ==================== MESSAGING MODELS ====================
+
+model Conversation {
+  id            String   @id @default(auto()) @map("_id") @db.ObjectId
+  listingId     String?  @map("listing_id") @db.ObjectId
+  transactionId String?  @unique @map("transaction_id") @db.ObjectId
+  lastMessageAt DateTime @default(now()) @map("last_message_at")
+  createdAt     DateTime @default(now()) @map("created_at")
+
+  // Relations
+  listing       Listing?       @relation(fields: [listingId], references: [id])
+  transaction   Transaction?   @relation(fields: [transactionId], references: [id])
+  participants  ConversationParticipant[]
+  messages      Message[]
+
+  @@map("conversations")
+}
+
+model ConversationParticipant {
+  id             String       @id @default(auto()) @map("_id") @db.ObjectId
+  conversationId String       @map("conversation_id") @db.ObjectId
+  userId         String       @map("user_id") @db.ObjectId
+  joinedAt       DateTime     @default(now()) @map("joined_at")
+  lastReadAt     DateTime?    @map("last_read_at")
+
+  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  user           User         @relation(fields: [userId], references: [id])
+
+  @@unique([conversationId, userId])
+  @@map("conversation_participants")
+}
+
+model Message {
+  id             String       @id @default(auto()) @map("_id") @db.ObjectId
+  conversationId String       @map("conversation_id") @db.ObjectId
+  senderId       String       @map("sender_id") @db.ObjectId
+  content        String
+  attachments    String[]     @default([])
+  readBy         String[]     @default([]) @map("read_by")
+  
+  // Content filtering flags
+  isFlagged      Boolean      @default(false) @map("is_flagged")
+  flagReason     String?      @map("flag_reason")
+  flagSeverity   String?      @map("flag_severity") // low, medium, high
+  detectedItems  Json?        @map("detected_items") // Array of detected contact info
+  
+  createdAt      DateTime     @default(now()) @map("created_at")
+
+  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  sender         User         @relation(fields: [senderId], references: [id])
+
+  @@map("messages")
+}
+
+// ==================== REVIEW MODELS ====================
+
+model Review {
+  id                 String      @id @default(auto()) @map("_id") @db.ObjectId
+  transactionId      String      @map("transaction_id") @db.ObjectId
+  reviewerId         String      @map("reviewer_id") @db.ObjectId
+  revieweeId         String      @map("reviewee_id") @db.ObjectId
+  rating             Int
+  title              String?
+  content            String
+  response           String?
+  isVerifiedPurchase Boolean     @default(true) @map("is_verified_purchase")
+  
+  createdAt          DateTime    @default(now()) @map("created_at")
+  updatedAt          DateTime    @updatedAt @map("updated_at")
+
+  transaction        Transaction @relation(fields: [transactionId], references: [id])
+  reviewer           User        @relation("ReviewerReviews", fields: [reviewerId], references: [id])
+  reviewee           User        @relation("RevieweeReviews", fields: [revieweeId], references: [id])
+
+  @@unique([transactionId, reviewerId])
+  @@map("reviews")
+}
+
+// ==================== DISPUTE MODELS ====================
+
+model Dispute {
+  id            String       @id @default(auto()) @map("_id") @db.ObjectId
+  transactionId String       @unique @map("transaction_id") @db.ObjectId
+  initiatorId   String       @map("initiator_id") @db.ObjectId
+  reason        String
+  description   String
+  evidence      String[]     @default([])
+  status        String       @default("opened")
+  resolution    String?
+  resolvedBy    String?      @map("resolved_by")
+  resolvedAt    DateTime?    @map("resolved_at")
+  
+  createdAt     DateTime     @default(now()) @map("created_at")
+  updatedAt     DateTime     @updatedAt @map("updated_at")
+
+  transaction   Transaction  @relation(fields: [transactionId], references: [id])
+  initiator     User         @relation(fields: [initiatorId], references: [id])
+
+  @@map("disputes")
+}
+
+// ==================== NOTIFICATION MODELS ====================
+
+model Notification {
+  id        String   @id @default(auto()) @map("_id") @db.ObjectId
+  userId    String   @map("user_id") @db.ObjectId
+  type      String
+  title     String
+  message   String
+  data      Json?
+  read      Boolean  @default(false)
+  createdAt DateTime @default(now()) @map("created_at")
+
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("notifications")
+}
+
+// ==================== AUDIT LOG ====================
+
+model AuditLog {
+  id         String   @id @default(auto()) @map("_id") @db.ObjectId
+  userId     String?  @map("user_id") @db.ObjectId
+  action     String
+  resource   String
+  resourceId String?  @map("resource_id")
+  oldData    Json?    @map("old_data")
+  newData    Json?    @map("new_data")
+  ipAddress  String?  @map("ip_address")
+  userAgent  String?  @map("user_agent")
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  user       User?    @relation(fields: [userId], references: [id])
+
+  @@map("audit_logs")
+}
