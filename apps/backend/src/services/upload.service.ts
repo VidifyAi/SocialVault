@@ -6,19 +6,32 @@ import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import { config } from '../config';
 import { v4 as uuidv4 } from 'uuid';
 import path from 'path';
+import { logger } from '../utils/logger';
 
-// Initialize S3 client
-const s3Client = new S3Client({
-  region: config.awsRegion,
-  credentials: {
-    accessKeyId: config.awsAccessKeyId,
-    secretAccessKey: config.awsSecretAccessKey,
-  },
-  ...(config.s3Endpoint && {
-    endpoint: config.s3Endpoint,
-    forcePathStyle: true, // Required for MinIO/R2
-  }),
-});
+let s3Client: S3Client | null = null;
+
+// Lazy initialization to avoid crashing if AWS credentials are missing
+const getS3Client = () => {
+  if (!s3Client && config.awsAccessKeyId && config.awsSecretAccessKey) {
+    s3Client = new S3Client({
+      region: config.awsRegion,
+      credentials: {
+        accessKeyId: config.awsAccessKeyId,
+        secretAccessKey: config.awsSecretAccessKey,
+      },
+      ...(config.s3Endpoint && {
+        endpoint: config.s3Endpoint,
+        forcePathStyle: true, // Required for MinIO/R2
+      }),
+    });
+  }
+  
+  if (!s3Client) {
+    throw new Error('S3 not configured. Please set AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY.');
+  }
+  
+  return s3Client;
+};
 
 // Allowed MIME types
 const ALLOWED_MIME_TYPES = {
@@ -94,7 +107,8 @@ class UploadService {
       },
     });
 
-    await s3Client.send(command);
+    const client = getS3Client();
+    await client.send(command);
 
     // Generate URL
     const url = this.getPublicUrl(key);
@@ -226,7 +240,8 @@ class UploadService {
       Key: key,
     });
 
-    await s3Client.send(command);
+    const client = getS3Client();
+    await client.send(command);
   }
 
   /**

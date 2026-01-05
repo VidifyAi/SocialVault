@@ -6,11 +6,25 @@ import crypto from 'crypto';
 import { config } from '../config';
 import { prisma } from '../lib/prisma';
 import { emailService } from './email.service';
+import { logger } from '../utils/logger';
 
-const razorpay = new Razorpay({
-  key_id: config.razorpayKeyId,
-  key_secret: config.razorpayKeySecret,
-});
+let razorpay: Razorpay | null = null;
+
+// Lazy initialization to avoid crashing if API keys are missing
+const getRazorpayClient = () => {
+  if (!razorpay && config.razorpayKeyId && config.razorpayKeySecret) {
+    razorpay = new Razorpay({
+      key_id: config.razorpayKeyId,
+      key_secret: config.razorpayKeySecret,
+    });
+  }
+  
+  if (!razorpay) {
+    throw new Error('Razorpay not configured. Please set RAZORPAY_KEY_ID and RAZORPAY_KEY_SECRET.');
+  }
+  
+  return razorpay;
+};
 
 interface CreateOrderParams {
   amount: number;
@@ -36,7 +50,8 @@ class PaymentService {
     // Convert to paise (Razorpay uses smallest currency unit)
     const amountInPaise = Math.round(amount * 100);
 
-    const order = await razorpay.orders.create({
+    const client = getRazorpayClient();
+    const order = await client.orders.create({
       amount: amountInPaise,
       currency,
       receipt: transactionId,
