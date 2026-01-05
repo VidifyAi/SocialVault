@@ -3,8 +3,17 @@
 
 import { Resend } from 'resend';
 import { config } from '../config';
+import { logger } from '../utils/logger';
 
-const resend = new Resend(config.resendApiKey);
+let resend: Resend | null = null;
+
+// Lazy initialization to avoid crashing if API key is missing
+const getResendClient = () => {
+  if (!resend && config.resendApiKey) {
+    resend = new Resend(config.resendApiKey);
+  }
+  return resend;
+};
 
 const FROM_EMAIL = config.emailFrom || 'SocialSwapr <noreply@socialswapr.com>';
 const FRONTEND_URL = config.frontendUrl;
@@ -83,8 +92,18 @@ interface NewMessageParams {
 
 class EmailService {
   private async send(params: EmailParams) {
+    const client = getResendClient();
+    
+    if (!client) {
+      logger.warn('RESEND_API_KEY not configured - skipping email send', {
+        to: params.to,
+        subject: params.subject
+      });
+      return { success: false, error: 'Email service not configured' };
+    }
+    
     try {
-      const result = await resend.emails.send({
+      const result = await client.emails.send({
         from: FROM_EMAIL,
         to: params.to,
         subject: params.subject,
