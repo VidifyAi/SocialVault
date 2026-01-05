@@ -29,6 +29,7 @@ RUN ls -R packages/types \
 
 # Runtime env
 ENV NODE_ENV=production
+ENV HOST=0.0.0.0
 WORKDIR /app/apps/backend
 
 EXPOSE 3001

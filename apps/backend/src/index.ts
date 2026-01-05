@@ -90,8 +90,9 @@ async function main() {
     await prisma.$connect();
     logger.info('Connected to database');
 
-    httpServer.listen(PORT, () => {
-      logger.info(`Server running on port ${PORT}`);
+    const HOST = process.env.HOST || '0.0.0.0';
+    httpServer.listen(PORT, HOST, () => {
+      logger.info(`Server running on ${HOST}:${PORT}`);
       logger.info(`Environment: ${config.nodeEnv}`);
     });
   } catch (error) {
