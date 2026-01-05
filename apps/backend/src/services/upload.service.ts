@@ -258,7 +258,11 @@ class UploadService {
       ContentType: contentType,
     });
 
-    return getSignedUrl(s3Client, command, { expiresIn });
+    const client = getS3Client();
+    if (!client) {
+      throw new Error('S3 client not configured');
+    }
+    return getSignedUrl(client, command, { expiresIn });
   }
 
   /**
@@ -273,7 +277,11 @@ class UploadService {
       Key: key,
     });
 
-    return getSignedUrl(s3Client, command, { expiresIn });
+    const client = getS3Client();
+    if (!client) {
+      throw new Error('S3 client not configured');
+    }
+    return getSignedUrl(client, command, { expiresIn });
   }
 
   /**

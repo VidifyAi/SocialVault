@@ -107,7 +107,11 @@ class PaymentService {
     }
 
     // Get payment details from Razorpay
-    const payment = await razorpay.payments.fetch(razorpayPaymentId);
+    const razorpayClient = getRazorpayClient();
+    if (!razorpayClient) {
+      throw new Error('Razorpay client not configured');
+    }
+    const payment = await razorpayClient.payments.fetch(razorpayPaymentId);
 
     // Update transaction
     const transaction = await prisma.transaction.update({
@@ -263,7 +267,12 @@ class PaymentService {
     }
 
     // Create refund in Razorpay
-    const refund = await razorpay.payments.refund(transaction.razorpayPaymentId, {
+    const razorpayClient = getRazorpayClient();
+    if (!razorpayClient) {
+      throw new Error('Razorpay client not configured');
+    }
+    
+    const refund = await razorpayClient.payments.refund(transaction.razorpayPaymentId, {
       amount: Math.round(transaction.amount * 100), // Full refund
       notes: {
         reason,
@@ -331,14 +340,22 @@ class PaymentService {
    * Get payment details
    */
   async getPaymentDetails(paymentId: string) {
-    return razorpay.payments.fetch(paymentId);
+    const razorpayClient = getRazorpayClient();
+    if (!razorpayClient) {
+      throw new Error('Razorpay client not configured');
+    }
+    return razorpayClient.payments.fetch(paymentId);
   }
 
   /**
    * Get order details
    */
   async getOrderDetails(orderId: string) {
-    return razorpay.orders.fetch(orderId);
+    const razorpayClient = getRazorpayClient();
+    if (!razorpayClient) {
+      throw new Error('Razorpay client not configured');
+    }
+    return razorpayClient.orders.fetch(orderId);
   }
 
   /**
