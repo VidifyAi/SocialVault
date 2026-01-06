@@ -111,7 +111,7 @@ resource apiApp 'Microsoft.Web/sites@2022-09-01' = {
         // Cosmos DB connection string (auto-populated from deployment output)
         { name: 'DATABASE_URL', value: listConnectionStrings(cosmos.id, '2023-11-15').connectionStrings[0].connectionString }
         // Redis connection string (if enabled)
-        { name: 'REDIS_URL', value: includeRedis ? 'rediss://:${listKeys(redis.id, redis.apiVersion).primaryKey}@${redis.properties.hostName}:6380' : '' }
+        { name: 'REDIS_URL', value: includeRedis ? 'rediss://:${listKeys(redis.id, '2023-08-01').primaryKey}@${redis.properties.hostName}:6380' : '' }
         // Application secrets - set these manually in Azure Portal after deployment
         { name: 'CLERK_SECRET_KEY', value: '' }
         { name: 'RAZORPAY_KEY_ID', value: '' }
@@ -177,8 +177,8 @@ resource webAppAcrPull 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
 
 // Outputs
 output acrLoginServer string = acr.properties.loginServer
-output cosmosConnectionString string = listConnectionStrings(cosmos.name, '2023-11-15').connectionStrings[0].connectionString
-output redisPrimaryKey string = includeRedis ? listKeys(redis.name, redis.apiVersion).primaryKey : ''
+output cosmosConnectionString string = listConnectionStrings(cosmos.id, '2023-11-15').connectionStrings[0].connectionString
+output redisPrimaryKey string = includeRedis ? listKeys(redis.id, '2023-08-01').primaryKey : ''
 output redisHostname string = includeRedis ? redis.properties.hostName : ''
 output apiUrl string = 'https://${apiAppName}.azurewebsites.net'
 output webUrl string = 'https://${webAppName}.azurewebsites.net'
