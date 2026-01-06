@@ -21,6 +21,10 @@ COPY apps/frontend/public ./apps/frontend/public
 # Install deps (workspace-wide)
 RUN pnpm install --recursive
 
+# Build argument for API URL (must be set at build time for Next.js)
+ARG NEXT_PUBLIC_API_URL=http://localhost:3001
+ENV NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL
+
 # Build frontend
 RUN pnpm --filter @socialswapr/frontend run build
 
