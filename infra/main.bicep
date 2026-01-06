@@ -12,6 +12,9 @@ var apiAppName = '${baseName}-api'
 var webAppName = '${baseName}-web'
 var redisName = toLower('${baseName}-redis')
 
+// Role definition ID for AcrPull
+var acrPullRoleDefinitionId = subscriptionResourceId('Microsoft.Authorization/roleDefinitions', '7f951dda-4ed3-4680-a7ca-43fe172d538d')
+
 // ACR
 resource acr 'Microsoft.ContainerRegistry/registries@2023-07-01' = {
   name: acrName
@@ -20,7 +23,7 @@ resource acr 'Microsoft.ContainerRegistry/registries@2023-07-01' = {
     name: 'Basic'
   }
   properties: {
-    adminUserEnabled: false
+    adminUserEnabled: true
   }
 }
 
@@ -92,26 +95,44 @@ resource apiApp 'Microsoft.Web/sites@2022-09-01' = {
   name: apiAppName
   location: location
   kind: 'app,linux,container'
+  identity: {
+    type: 'SystemAssigned'
+  }
   properties: {
     serverFarmId: plan.id
     siteConfig: {
       linuxFxVersion: 'DOCKER|${acr.properties.loginServer}/backend:latest'
+      acrUseManagedIdentityCreds: true
+      healthCheckPath: '/health'
       appSettings: [
         { name: 'WEBSITES_PORT', value: '3001' }
         { name: 'DOCKER_REGISTRY_SERVER_URL', value: 'https://${acr.properties.loginServer}' }
-        // Set these after deployment with real values
-        { name: 'DOCKER_REGISTRY_SERVER_USERNAME', value: '' }
-        { name: 'DOCKER_REGISTRY_SERVER_PASSWORD', value: '' }
-        { name: 'DATABASE_URL', value: '' }
-        { name: 'REDIS_URL', value: '' }
+        { name: 'WEBSITES_ENABLE_APP_SERVICE_STORAGE', value: 'false' }
+        // Cosmos DB connection string (auto-populated from deployment output)
+        { name: 'DATABASE_URL', value: listConnectionStrings(cosmos.id, '2023-11-15').connectionStrings[0].connectionString }
+        // Redis connection string (if enabled)
+        { name: 'REDIS_URL', value: includeRedis ? 'rediss://:${listKeys(redis.id, redis.apiVersion).primaryKey}@${redis.properties.hostName}:6380' : '' }
+        // Application secrets - set these manually in Azure Portal after deployment
         { name: 'CLERK_SECRET_KEY', value: '' }
         { name: 'RAZORPAY_KEY_ID', value: '' }
         { name: 'RAZORPAY_KEY_SECRET', value: '' }
+        { name: 'FRONTEND_URL', value: 'https://${webAppName}.azurewebsites.net' }
       ]
     }
     httpsOnly: true
   }
-  dependsOn: [plan, acr]
+  dependsOn: [plan, acr, cosmos]
+}
+
+// Role assignment for backend to pull from ACR
+resource apiAppAcrPull 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
+  name: guid(acr.id, apiApp.id, acrPullRoleDefinitionId)
+  scope: acr
+  properties: {
+    principalId: apiApp.identity.principalId
+    roleDefinitionId: acrPullRoleDefinitionId
+    principalType: 'ServicePrincipal'
+  }
 }
 
 // Frontend Web App (container)
@@ -119,17 +140,21 @@ resource webApp 'Microsoft.Web/sites@2022-09-01' = {
   name: webAppName
   location: location
   kind: 'app,linux,container'
+  identity: {
+    type: 'SystemAssigned'
+  }
   properties: {
     serverFarmId: plan.id
     siteConfig: {
       linuxFxVersion: 'DOCKER|${acr.properties.loginServer}/frontend:latest'
+      acrUseManagedIdentityCreds: true
+      healthCheckPath: '/'
       appSettings: [
         { name: 'WEBSITES_PORT', value: '3000' }
         { name: 'DOCKER_REGISTRY_SERVER_URL', value: 'https://${acr.properties.loginServer}' }
-        // Set these after deployment with real values
-        { name: 'DOCKER_REGISTRY_SERVER_USERNAME', value: '' }
-        { name: 'DOCKER_REGISTRY_SERVER_PASSWORD', value: '' }
+        { name: 'WEBSITES_ENABLE_APP_SERVICE_STORAGE', value: 'false' }
         { name: 'NEXT_PUBLIC_API_URL', value: 'https://${apiAppName}.azurewebsites.net' }
+        // Application secrets - set these manually in Azure Portal after deployment
         { name: 'NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY', value: '' }
         { name: 'CLERK_SECRET_KEY', value: '' }
       ]
@@ -137,6 +162,17 @@ resource webApp 'Microsoft.Web/sites@2022-09-01' = {
     httpsOnly: true
   }
   dependsOn: [plan, acr]
+}
+
+// Role assignment for frontend to pull from ACR
+resource webAppAcrPull 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
+  name: guid(acr.id, webApp.id, acrPullRoleDefinitionId)
+  scope: acr
+  properties: {
+    principalId: webApp.identity.principalId
+    roleDefinitionId: acrPullRoleDefinitionId
+    principalType: 'ServicePrincipal'
+  }
 }
 
 // Outputs
