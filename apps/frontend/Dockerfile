@@ -8,11 +8,11 @@ RUN npm install -g pnpm
 # Copy root workspace files
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml turbo.json ./
 
-# Copy frontend workspace
+# Copy frontend workspace config files
 COPY apps/frontend/package.json apps/frontend/tsconfig.json apps/frontend/next.config.js apps/frontend/postcss.config.js apps/frontend/tailwind.config.ts ./apps/frontend/
 
-# Copy shared types
-COPY packages/types/package.json ./packages/types/
+# Copy shared types (including source for transpilation)
+COPY packages/types ./packages/types
 
 # Copy app source
 COPY apps/frontend/src ./apps/frontend/src
@@ -20,6 +20,9 @@ COPY apps/frontend/public ./apps/frontend/public
 
 # Install deps (workspace-wide)
 RUN pnpm install --recursive
+
+# Build shared types first
+RUN pnpm --filter @socialswapr/types run build
 
 # Build argument for API URL (must be set at build time for Next.js)
 ARG NEXT_PUBLIC_API_URL=http://localhost:3001
