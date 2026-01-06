@@ -57,6 +57,21 @@ jobs:
             --resource-group ${{ secrets.AZURE_RESOURCE_GROUP }} \
             --docker-custom-image-name $BACKEND_IMAGE \
             --docker-registry-server-url https://$ACR_NAME.azurecr.io
+          
+          # Restart to pull new image
+          az webapp restart --name $BACKEND_WEBAPP --resource-group ${{ secrets.AZURE_RESOURCE_GROUP }}
+          
+          # Wait and verify health
+          echo "Waiting for backend to start..."
+          sleep 45
+          for i in {1..10}; do
+            if curl -f -sS https://$BACKEND_WEBAPP.azurewebsites.net/health > /dev/null 2>&1; then
+              echo "✅ Backend is healthy"
+              break
+            fi
+            echo "Attempt $i: Backend not ready, waiting..."
+            sleep 10
+          done
 
       - name: Deploy frontend container
         run: |
@@ -65,3 +80,18 @@ jobs:
             --resource-group ${{ secrets.AZURE_RESOURCE_GROUP }} \
             --docker-custom-image-name $FRONTEND_IMAGE \
             --docker-registry-server-url https://$ACR_NAME.azurecr.io
+          
+          # Restart to pull new image
+          az webapp restart --name $FRONTEND_WEBAPP --resource-group ${{ secrets.AZURE_RESOURCE_GROUP }}
+          
+          # Wait and verify health
+          echo "Waiting for frontend to start..."
+          sleep 45
+          for i in {1..10}; do
+            if curl -f -sS -I https://$FRONTEND_WEBAPP.azurewebsites.net > /dev/null 2>&1; then
+              echo "✅ Frontend is healthy"
+              break
+            fi
+            echo "Attempt $i: Frontend not ready, waiting..."
+            sleep 10
+          done
