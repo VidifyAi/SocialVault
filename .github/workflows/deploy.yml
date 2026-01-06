@@ -45,7 +45,7 @@ jobs:
         run: |
           IMAGE_TAG=frontend:${{ github.sha }}
           docker build -f apps/frontend/Dockerfile \
-            --build-arg NEXT_PUBLIC_API_URL=https://${{ secrets.BACKEND_WEBAPP }}.azurewebsites.net \
+            --build-arg NEXT_PUBLIC_API_URL=https://$BACKEND_WEBAPP.azurewebsites.net \
             -t $ACR_NAME.azurecr.io/$IMAGE_TAG .
           docker push $ACR_NAME.azurecr.io/$IMAGE_TAG
           echo "FRONTEND_IMAGE=$ACR_NAME.azurecr.io/$IMAGE_TAG" >> $GITHUB_ENV
