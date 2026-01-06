@@ -16,7 +16,7 @@ env:
 jobs:
   build-and-deploy:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 30
     permissions:
       id-token: write
       contents: read
@@ -24,7 +24,7 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Azure Login (OIDC)
-        uses: azure/login@v1
+        uses: azure/login@v2
         with:
           client-id: ${{ env.AZURE_CLIENT_ID }}
           tenant-id: ${{ env.AZURE_TENANT_ID }}
@@ -35,42 +35,71 @@ jobs:
 
       - name: Build and push backend
         run: |
-          docker build -f apps/backend/Dockerfile -t $ACR_NAME.azurecr.io/backend:${{ github.sha }} .
+          docker build -f apps/backend/Dockerfile \
+            -t $ACR_NAME.azurecr.io/backend:${{ github.sha }} \
+            -t $ACR_NAME.azurecr.io/backend:latest .
           docker push $ACR_NAME.azurecr.io/backend:${{ github.sha }}
+          docker push $ACR_NAME.azurecr.io/backend:latest
 
       - name: Build and push frontend
         run: |
           docker build -f apps/frontend/Dockerfile \
             --build-arg NEXT_PUBLIC_API_URL=https://$BACKEND_WEBAPP.azurewebsites.net \
-            -t $ACR_NAME.azurecr.io/frontend:${{ github.sha }} .
+            -t $ACR_NAME.azurecr.io/frontend:${{ github.sha }} \
+            -t $ACR_NAME.azurecr.io/frontend:latest .
           docker push $ACR_NAME.azurecr.io/frontend:${{ github.sha }}
+          docker push $ACR_NAME.azurecr.io/frontend:latest
 
-      - name: Deploy and restart backend
+      - name: Deploy backend container
         run: |
           az webapp config container set \
             --name $BACKEND_WEBAPP \
             --resource-group ${{ secrets.AZURE_RESOURCE_GROUP }} \
-            --docker-custom-image-name $ACR_NAME.azurecr.io/backend:${{ github.sha }} \
-            --docker-registry-server-url https://$ACR_NAME.azurecr.io
-          az webapp restart --name $BACKEND_WEBAPP --resource-group ${{ secrets.AZURE_RESOURCE_GROUP }}
+            --container-image-name $ACR_NAME.azurecr.io/backend:${{ github.sha }} \
+            --container-registry-url https://$ACR_NAME.azurecr.io
 
-      - name: Deploy and restart frontend  
+      - name: Deploy frontend container
         run: |
           az webapp config container set \
             --name $FRONTEND_WEBAPP \
             --resource-group ${{ secrets.AZURE_RESOURCE_GROUP }} \
-            --docker-custom-image-name $ACR_NAME.azurecr.io/frontend:${{ github.sha }} \
-            --docker-registry-server-url https://$ACR_NAME.azurecr.io
+            --container-image-name $ACR_NAME.azurecr.io/frontend:${{ github.sha }} \
+            --container-registry-url https://$ACR_NAME.azurecr.io
+
+      - name: Restart web apps
+        run: |
+          az webapp restart --name $BACKEND_WEBAPP --resource-group ${{ secrets.AZURE_RESOURCE_GROUP }}
           az webapp restart --name $FRONTEND_WEBAPP --resource-group ${{ secrets.AZURE_RESOURCE_GROUP }}
 
-      - name: Wait and verify backend
+      - name: Wait for container startup
         run: |
-          echo "Waiting 45s for backend startup..."
-          sleep 45
-          curl -f -sS https://$BACKEND_WEBAPP.azurewebsites.net/health || echo "Backend check failed but continuing"
+          echo "Waiting 120s for containers to start..."
+          sleep 120
 
-      - name: Wait and verify frontend
+      - name: Verify backend health
         run: |
-          echo "Waiting 45s for frontend startup..."
-          sleep 45
-          curl -f -sS -I https://$FRONTEND_WEBAPP.azurewebsites.net || echo "Frontend check failed but continuing"
+          echo "Checking backend health with retries..."
+          for i in 1 2 3 4 5; do
+            if curl -f -sS --max-time 30 https://$BACKEND_WEBAPP.azurewebsites.net/health; then
+              echo "Backend is healthy!"
+              exit 0
+            fi
+            echo "Attempt $i failed, waiting 30s..."
+            sleep 30
+          done
+          echo "Backend health check failed after 5 attempts"
+          exit 1
+
+      - name: Verify frontend health
+        run: |
+          echo "Checking frontend health with retries..."
+          for i in 1 2 3 4 5; do
+            if curl -f -sS --max-time 30 -o /dev/null https://$FRONTEND_WEBAPP.azurewebsites.net; then
+              echo "Frontend is healthy!"
+              exit 0
+            fi
+            echo "Attempt $i failed, waiting 30s..."
+            sleep 30
+          done
+          echo "Frontend health check failed after 5 attempts"
+          exit 1
