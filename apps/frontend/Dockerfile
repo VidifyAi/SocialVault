@@ -27,4 +27,4 @@ RUN pnpm --filter @socialswapr/frontend run build
 ENV NODE_ENV=production
 WORKDIR /app/apps/frontend
 EXPOSE 3000
-CMD ["sh", "-c", "pnpm start -p ${PORT:-3000} -H 0.0.0.0"]
+CMD ["sh", "-c", "node_modules/.bin/next start -p ${PORT:-3000} -H 0.0.0.0"]
