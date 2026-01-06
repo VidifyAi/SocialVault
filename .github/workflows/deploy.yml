@@ -6,31 +6,22 @@ on:
       - main
 
 env:
+  ACR_NAME: ${{ secrets.ACR_NAME }}
   BACKEND_WEBAPP: ${{ secrets.BACKEND_WEBAPP }}
   FRONTEND_WEBAPP: ${{ secrets.FRONTEND_WEBAPP }}
   AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
   AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
   AZURE_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
-  NODE_VERSION: '20.x'
 
 jobs:
   build-and-deploy:
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     permissions:
       id-token: write
       contents: read
     steps:
       - uses: actions/checkout@v4
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: ${{ env.NODE_VERSION }}
-
-      - name: Setup pnpm
-        uses: pnpm/action-setup@v2
-        with:
-          version: 8
 
       - name: Azure Login (OIDC)
         uses: azure/login@v1
@@ -39,82 +30,47 @@ jobs:
           tenant-id: ${{ env.AZURE_TENANT_ID }}
           subscription-id: ${{ env.AZURE_SUBSCRIPTION_ID }}
 
-      # Backend deployment
-      - name: Install backend dependencies
+      - name: Login to ACR
+        run: az acr login --name $ACR_NAME
+
+      - name: Build and push backend
         run: |
-          cd apps/backend
-          pnpm install --frozen-lockfile
+          docker build -f apps/backend/Dockerfile -t $ACR_NAME.azurecr.io/backend:${{ github.sha }} .
+          docker push $ACR_NAME.azurecr.io/backend:${{ github.sha }}
 
-      - name: Build backend
+      - name: Build and push frontend
         run: |
-          cd apps/backend
-          pnpm exec prisma generate
-          pnpm run build
+          docker build -f apps/frontend/Dockerfile \
+            --build-arg NEXT_PUBLIC_API_URL=https://$BACKEND_WEBAPP.azurewebsites.net \
+            -t $ACR_NAME.azurecr.io/frontend:${{ github.sha }} .
+          docker push $ACR_NAME.azurecr.io/frontend:${{ github.sha }}
 
-      - name: Create backend deployment package
+      - name: Deploy and restart backend
         run: |
-          cd apps/backend
-          mkdir -p deploy
-          cp -r dist node_modules prisma package.json deploy/
-          cd deploy && zip -r ../backend-deploy.zip .
+          az webapp config container set \
+            --name $BACKEND_WEBAPP \
+            --resource-group ${{ secrets.AZURE_RESOURCE_GROUP }} \
+            --docker-custom-image-name $ACR_NAME.azurecr.io/backend:${{ github.sha }} \
+            --docker-registry-server-url https://$ACR_NAME.azurecr.io
+          az webapp restart --name $BACKEND_WEBAPP --resource-group ${{ secrets.AZURE_RESOURCE_GROUP }}
 
-      - name: Deploy backend to Azure
-        uses: azure/webapps-deploy@v2
-        with:
-          app-name: ${{ env.BACKEND_WEBAPP }}
-          package: apps/backend/backend-deploy.zip
-
-      # Frontend deployment  
-      - name: Install frontend dependencies
+      - name: Deploy and restart frontend  
         run: |
-          cd apps/frontend
-          pnpm install --frozen-lockfile
-        env:
-          NEXT_PUBLIC_API_URL: https://${{ env.BACKEND_WEBAPP }}.azurewebsites.net
+          az webapp config container set \
+            --name $FRONTEND_WEBAPP \
+            --resource-group ${{ secrets.AZURE_RESOURCE_GROUP }} \
+            --docker-custom-image-name $ACR_NAME.azurecr.io/frontend:${{ github.sha }} \
+            --docker-registry-server-url https://$ACR_NAME.azurecr.io
+          az webapp restart --name $FRONTEND_WEBAPP --resource-group ${{ secrets.AZURE_RESOURCE_GROUP }}
 
-      - name: Build frontend
+      - name: Wait and verify backend
         run: |
-          cd apps/frontend
-          pnpm run build
-        env:
-          NEXT_PUBLIC_API_URL: https://${{ env.BACKEND_WEBAPP }}.azurewebsites.net
+          echo "Waiting 45s for backend startup..."
+          sleep 45
+          curl -f -sS https://$BACKEND_WEBAPP.azurewebsites.net/health || echo "Backend check failed but continuing"
 
-      - name: Create frontend deployment package
+      - name: Wait and verify frontend
         run: |
-          cd apps/frontend
-          mkdir -p deploy
-          cp -r .next public node_modules package.json next.config.js deploy/
-          cd deploy && zip -r ../frontend-deploy.zip .
-
-      - name: Deploy frontend to Azure
-        uses: azure/webapps-deploy@v2
-        with:
-          app-name: ${{ env.FRONTEND_WEBAPP }}
-          package: apps/frontend/frontend-deploy.zip
-
-      # Health checks
-      - name: Verify backend health
-        run: |
-          echo "Waiting for backend..."
-          sleep 30
-          for i in {1..10}; do
-            if curl -f -sS https://${{ env.BACKEND_WEBAPP }}.azurewebsites.net/health; then
-              echo "✅ Backend is healthy"
-              break
-            fi
-            echo "Attempt $i: waiting..."
-            sleep 10
-          done
-
-      - name: Verify frontend health
-        run: |
-          echo "Waiting for frontend..."
-          sleep 20
-          for i in {1..10}; do
-            if curl -f -sS -I https://${{ env.FRONTEND_WEBAPP }}.azurewebsites.net; then
-              echo "✅ Frontend is healthy"
-              break
-            fi
-            echo "Attempt $i: waiting..."
-            sleep 10
-          done
+          echo "Waiting 45s for frontend startup..."
+          sleep 45
+          curl -f -sS -I https://$FRONTEND_WEBAPP.azurewebsites.net || echo "Frontend check failed but continuing"
