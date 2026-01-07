@@ -167,12 +167,12 @@ export default function NewListingPage() {
       
       toast({
         title: 'Listing created!',
-        description: 'Your listing has been submitted for review.',
+        description: 'Next step: verify ownership so we can publish it.',
         variant: 'success',
       });
 
       if (listingId) {
-        router.push(`/listing/${listingId}`);
+        router.push(`/dashboard/listings/${listingId}/verify`);
       } else {
         router.push('/dashboard/listings');
       }

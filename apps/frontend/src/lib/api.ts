@@ -79,6 +79,10 @@ export const listingsApi = {
   delete: (id: string) => api.delete(`/listings/${id}`),
   getFeatured: () => api.get('/listings/featured'),
   getMyListings: () => api.get('/listings/my'),
+  verifyOwnership: (
+    id: string,
+    payload: { verificationUrl: string; method?: string }
+  ) => api.post(`/listings/${id}/verify`, payload),
 };
 
 export const transactionsApi = {

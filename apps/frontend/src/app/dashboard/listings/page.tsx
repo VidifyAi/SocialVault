@@ -40,6 +40,7 @@ interface Listing {
   followers: number;
   status: string;
   createdAt: string;
+  verificationStatus?: string;
   _count?: {
     offers: number;
     views: number;
@@ -71,6 +72,7 @@ export default function MyListingsPage() {
         followers: l.metrics?.followers || 0,
         status: l.status,
         createdAt: l.createdAt,
+        verificationStatus: l.verificationStatus,
         _count: l._count,
       }));
       setListings(mappedListings);
@@ -246,6 +248,11 @@ export default function MyListingsPage() {
                       >
                         {listing.status === 'pending_review' ? 'Pending Review' : listing.status}
                       </Badge>
+                      {listing.verificationStatus !== 'verified' && (
+                        <Badge variant="outline" className="border-dashed">
+                          Ownership: {listing.verificationStatus || 'pending'}
+                        </Badge>
+                      )}
                     </div>
                     <div className="flex items-center gap-4 text-sm text-muted-foreground">
                       <span>{getPlatformName(listing.platform)}</span>
@@ -253,7 +260,7 @@ export default function MyListingsPage() {
                       <span>Listed {formatRelativeTime(listing.createdAt)}</span>
                     </div>
                   </div>
-                  <div className="text-right">
+                  <div className="text-right space-y-2">
                     <div className="font-bold text-lg">
                       {formatCurrency(listing.price)}
                     </div>
@@ -261,6 +268,13 @@ export default function MyListingsPage() {
                       <div className="text-sm text-muted-foreground">
                         {listing._count.offers} offers • {listing._count.views} views
                       </div>
+                    )}
+                    {listing.verificationStatus !== 'verified' && (
+                      <Button variant="outline" size="sm" asChild>
+                        <Link href={`/dashboard/listings/${listing.id}/verify`}>
+                          Verify ownership
+                        </Link>
+                      </Button>
                     )}
                   </div>
                   <DropdownMenu>

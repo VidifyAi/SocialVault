@@ -58,14 +58,13 @@ interface Listing {
   images: string[];
   accountAge: string;
   monthlyRevenue?: number;
-  isVerified: boolean;
+  verificationStatus?: string;
   status: string;
   transferSteps: string[];
   seller: {
     id: string;
     username: string;
     avatarUrl?: string;
-    isVerified: boolean;
     createdAt: string;
     _count?: {
       sellerTransactions: number;
@@ -260,7 +259,7 @@ export default function ListingPage() {
                   <PlatformIcon platform={listing.platform} size={96} />
                 </div>
               )}
-              {listing.isVerified && (
+              {listing.verificationStatus === 'verified' && (
                 <Badge className="absolute top-4 left-4 gap-1">
                   <CheckCircle className="h-3 w-3" />
                   Verified

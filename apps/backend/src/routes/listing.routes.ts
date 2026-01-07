@@ -127,6 +127,28 @@ router.get(
   }
 );
 
+// POST /listings/:id/verify - Verify ownership via platform-based proof
+router.post(
+  '/:id/verify',
+  authenticate,
+  async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
+    try {
+      const listing = await listingService.verifyOwnership(
+        req.params.id,
+        req.user!.userId,
+        req.body.verificationUrl,
+        req.body.method
+      );
+      res.json({
+        success: true,
+        data: listing,
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
 // POST /listings - Create new listing
 // Any authenticated user can create listings (they become a seller)
 router.post(

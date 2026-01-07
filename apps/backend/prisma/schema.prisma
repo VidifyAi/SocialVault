@@ -72,6 +72,10 @@ model Listing {
   displayName         String?   @map("display_name")
   status              String    @default("draft")
   verificationStatus  String    @default("unverified") @map("verification_status")
+  verificationCode    String?   @map("verification_code")
+  verificationMethod  String?   @map("verification_method")
+  verificationUrl     String?   @map("verification_url")
+  verificationCheckedAt DateTime? @map("verification_checked_at")
   accountType         String    @default("personal") @map("account_type")
   niche               String
   description         String

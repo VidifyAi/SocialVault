@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
 import { useSearchParams, useRouter } from 'next/navigation';
-import { Search, SlidersHorizontal, X, Loader2 } from 'lucide-react';
+import { Search, SlidersHorizontal, X, Loader2, CheckCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -36,6 +36,7 @@ interface Listing {
   engagement: number;
   category: string;
   images: string[];
+  verificationStatus?: string;
   seller: {
     id: string;
     username: string;
@@ -141,6 +142,7 @@ export default function BrowsePage() {
         engagement: l.engagement || l.metrics?.engagementRate || l.metrics?.engagement || 0,
         category: l.category || l.niche || 'general',
         images: l.images || l.screenshots || [],
+        verificationStatus: l.verificationStatus,
         seller: l.seller || { id: l.sellerId, username: l.sellerUsername || 'seller' },
         createdAt: l.createdAt,
       }));
@@ -396,6 +398,11 @@ export default function BrowsePage() {
                       <Badge className="absolute top-2 left-2">
                         {getPlatformName(listing.platform)}
                       </Badge>
+                      {listing.verificationStatus === 'verified' && (
+                        <Badge className="absolute top-2 right-2 gap-1">
+                          <CheckCircle className="h-3 w-3" /> Verified
+                        </Badge>
+                      )}
                     </div>
                   </CardHeader>
                   <CardContent className="p-4">

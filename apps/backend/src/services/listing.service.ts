@@ -1,9 +1,49 @@
+import http from 'http';
+import https from 'https';
 import { prisma } from '../lib/prisma';
 import { cache } from '../lib/redis';
 import { NotFoundError, ForbiddenError, BadRequestError } from '../utils/errors';
 import { Prisma } from '@prisma/client';
-import { config } from '../config';
 import { ListingStatus } from '@socialswapr/types';
+
+const generateVerificationCode = () => {
+  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+  let code = 'SS-';
+  for (let i = 0; i < 6; i += 1) {
+    code += chars[Math.floor(Math.random() * chars.length)];
+  }
+  return code;
+};
+
+const fetchVerificationPage = (url: string) =>
+  new Promise<string>((resolve, reject) => {
+    const client = url.startsWith('https') ? https : http;
+    const req = client.get(url, (res) => {
+      if ((res.statusCode || 500) >= 400) {
+        reject(new Error(`Verification URL responded with status ${res.statusCode}`));
+        return;
+      }
+
+      const chunks: Buffer[] = [];
+      res.on('data', (chunk) => {
+        chunks.push(typeof chunk === 'string' ? Buffer.from(chunk) : chunk);
+        const size = chunks.reduce((total, c) => total + c.length, 0);
+        if (size > 1_000_000) {
+          req.destroy();
+          reject(new Error('Verification response too large'));
+        }
+      });
+
+      res.on('end', () => {
+        resolve(Buffer.concat(chunks).toString('utf8'));
+      });
+    });
+
+    req.on('error', (err) => reject(err));
+    req.setTimeout(8000, () => {
+      req.destroy(new Error('Verification request timed out'));
+    });
+  });
 
 // Accept both frontend form format and structured API format
 interface CreateListingData {
@@ -70,6 +110,8 @@ export class ListingService {
     // Frontend sends: title, platform, category, handle, followers, engagement, accountAge, monthlyRevenue
     // Database expects: username, niche, metrics (JSON), accountAge (number)
     
+    const verificationCode = generateVerificationCode();
+
     const username = data.username || data.handle || 'unknown';
     const niche = data.niche || data.category || 'other';
     const displayName = data.displayName || data.title || username;
@@ -107,6 +149,8 @@ export class ListingService {
         screenshots: data.screenshots || [],
         status: 'pending_review', // Requires admin approval before going live
         verificationStatus: 'pending',
+        verificationCode,
+        verificationMethod: 'platform_action',
       },
       include: {
         seller: {
@@ -128,7 +172,7 @@ export class ListingService {
   }
 
   async getById(id: string, userId?: string) {
-    const listing = await prisma.listing.findUnique({
+    let listing = await prisma.listing.findUnique({
       where: { id },
       include: {
         seller: {
@@ -159,6 +203,43 @@ export class ListingService {
 
     if (!listing) {
       throw new NotFoundError('Listing');
+    }
+
+    // Backfill verification code for older listings
+    if (!listing.verificationCode) {
+      listing = await prisma.listing.update({
+        where: { id },
+        data: {
+          verificationCode: generateVerificationCode(),
+          verificationMethod: listing.verificationMethod || 'platform_action',
+          verificationStatus: listing.verificationStatus || 'pending',
+        },
+        include: {
+          seller: {
+            select: {
+              id: true,
+              username: true,
+              avatarUrl: true,
+              trustScore: true,
+              kycStatus: true,
+              createdAt: true,
+              _count: {
+                select: {
+                  soldTransactions: {
+                    where: { status: 'completed' },
+                  },
+                  reviewsReceived: true,
+                },
+              },
+            },
+          },
+          _count: {
+            select: {
+              favorites: true,
+            },
+          },
+        },
+      });
     }
 
     // Check if listing is accessible
@@ -467,8 +548,75 @@ export class ListingService {
     }));
   }
 
+  async verifyOwnership(
+    listingId: string,
+    userId: string,
+    verificationUrl: string,
+    method = 'platform_action'
+  ) {
+    if (!verificationUrl) {
+      throw new BadRequestError('Verification URL is required');
+    }
+
+    if (!/^https?:\/\//i.test(verificationUrl)) {
+      throw new BadRequestError('Verification URL must start with http or https');
+    }
+
+    const listing = await prisma.listing.findUnique({ where: { id: listingId } });
+
+    if (!listing) {
+      throw new NotFoundError('Listing');
+    }
+
+    if (listing.sellerId !== userId) {
+      throw new ForbiddenError('You can only verify your own listings');
+    }
+
+    const code = listing.verificationCode || generateVerificationCode();
+
+    let pageContent = '';
+    try {
+      pageContent = await fetchVerificationPage(verificationUrl.trim());
+    } catch (error: any) {
+      throw new BadRequestError(error.message || 'Could not fetch verification URL');
+    }
+
+    const verified = pageContent.toLowerCase().includes(code.toLowerCase());
+
+    const updatedListing = await prisma.listing.update({
+      where: { id: listingId },
+      data: {
+        verificationStatus: verified ? 'verified' : 'failed',
+        verificationCode: code,
+        verificationMethod: method,
+        verificationUrl: verificationUrl.trim(),
+        verificationCheckedAt: new Date(),
+      },
+    });
+
+    await cache.delPattern('listings:*');
+
+    if (!verified) {
+      throw new BadRequestError(
+        'Verification code not found on the provided profile. Add the code to your bio/story/link and try again.'
+      );
+    }
+
+    return updatedListing;
+  }
+
   // Admin functions
   async approveListing(id: string) {
+    const listing = await prisma.listing.findUnique({ where: { id } });
+
+    if (!listing) {
+      throw new NotFoundError('Listing');
+    }
+
+    if (listing.verificationStatus !== 'verified') {
+      throw new BadRequestError('Listing must be ownership verified before publishing');
+    }
+
     return prisma.listing.update({
       where: { id },
       data: { status: 'active' },
