@@ -25,8 +25,11 @@ RUN pnpm install --recursive
 RUN pnpm --filter @socialswapr/types run build
 
 # Build argument for API URL (must be set at build time for Next.js)
-ARG NEXT_PUBLIC_API_URL=http://localhost:3001
+ARG NEXT_PUBLIC_API_URL
 ENV NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL
+
+# Fail the build if NEXT_PUBLIC_API_URL is not provided
+RUN test -n "$NEXT_PUBLIC_API_URL" || (echo "ERROR: NEXT_PUBLIC_API_URL build arg is required" && exit 1)
 
 # Build frontend
 RUN pnpm --filter @socialswapr/frontend run build

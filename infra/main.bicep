@@ -3,6 +3,9 @@ param baseName string = 'socialswapr'
 param appServiceSku string = 'B1'
 param includeRedis bool = true
 param cosmosLocation string = location
+// Optional overrides for URLs (set via GitHub/Azure deployment parameters)
+param frontendUrlOverride string = ''
+param apiBaseUrlOverride string = ''
 
 // Names
 var acrName = toLower('${baseName}acr${uniqueString(resourceGroup().id)}')
@@ -116,7 +119,7 @@ resource apiApp 'Microsoft.Web/sites@2022-09-01' = {
         { name: 'CLERK_SECRET_KEY', value: '' }
         { name: 'RAZORPAY_KEY_ID', value: '' }
         { name: 'RAZORPAY_KEY_SECRET', value: '' }
-        { name: 'FRONTEND_URL', value: 'https://${webAppName}.azurewebsites.net' }
+        { name: 'FRONTEND_URL', value: frontendUrlOverride != '' ? frontendUrlOverride : 'https://${webAppName}.azurewebsites.net' }
       ]
     }
     httpsOnly: true
@@ -153,7 +156,7 @@ resource webApp 'Microsoft.Web/sites@2022-09-01' = {
         { name: 'WEBSITES_PORT', value: '3000' }
         { name: 'DOCKER_REGISTRY_SERVER_URL', value: 'https://${acr.properties.loginServer}' }
         { name: 'WEBSITES_ENABLE_APP_SERVICE_STORAGE', value: 'false' }
-        { name: 'NEXT_PUBLIC_API_URL', value: 'https://${apiAppName}.azurewebsites.net' }
+        { name: 'NEXT_PUBLIC_API_URL', value: apiBaseUrlOverride != '' ? apiBaseUrlOverride : 'https://${apiAppName}.azurewebsites.net' }
         // Application secrets - set these manually in Azure Portal after deployment
         { name: 'NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY', value: '' }
         { name: 'CLERK_SECRET_KEY', value: '' }
