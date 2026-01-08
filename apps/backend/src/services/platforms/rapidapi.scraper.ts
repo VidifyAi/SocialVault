@@ -66,7 +66,7 @@ interface RapidAPIConfig {
 class RapidAPIScraper {
   private readonly apiKey: string;
   private readonly apiHost: string;
-  private readonly baseUrl: string;
+  private readonly baseUrl: string = '';
   private readonly timeout: number = 8000;
 
   // Platform-specific RapidAPI endpoints

@@ -69,7 +69,7 @@ export async function markNotificationAsRead(notificationId: string, userId: str
   try {
     const notification = await prisma.notification.update({
       where: { id: notificationId },
-      data: { read: true, readAt: new Date() },
+      data: { read: true },
     });
 
     return notification;

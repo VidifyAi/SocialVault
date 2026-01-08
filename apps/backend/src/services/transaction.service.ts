@@ -3,10 +3,7 @@ import { config } from '../config';
 import { NotFoundError, ForbiddenError, BadRequestError } from '../utils/errors';
 import { Prisma } from '@prisma/client';
 import { TransactionStatus, EscrowStatus } from '@socialswapr/types';
-import { createNotifications } from '../utils/notifications';
-import { Server as SocketServer } from 'socket.io';
-import { emitNotification, emitTransactionUpdate } from '../websocket';
-import { createNotification } from '../utils/notifications';
+import { createNotifications, createNotification } from '../utils/notifications';
 import { Server as SocketServer } from 'socket.io';
 import { emitNotification, emitTransactionUpdate } from '../websocket';
 

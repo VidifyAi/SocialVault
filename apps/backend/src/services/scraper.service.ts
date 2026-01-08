@@ -73,7 +73,7 @@ class ScraperService {
 
       // Store in cache
       try {
-        await cache.setex(cacheKey, this.CACHE_TTL, JSON.stringify(cacheData));
+        await cache.set(cacheKey, JSON.stringify(cacheData), this.CACHE_TTL);
       } catch (e) {
         // Cache write failed, but scraping succeeded
       }

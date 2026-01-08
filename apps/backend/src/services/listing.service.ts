@@ -200,6 +200,8 @@ interface CreateListingData {
   includesOriginalEmail?: boolean;
   accountAge?: number;
   screenshots?: string[];
+  verificationCode?: string;
+  verificationUrl?: string;
 }
 
 interface ListingFilters {
