@@ -555,9 +555,6 @@ export default function ListingPage() {
                     <span className="font-semibold">
                       @{listing.seller.username}
                     </span>
-                    {listing.seller.isVerified && (
-                      <CheckCircle className="h-4 w-4 text-primary" />
-                    )}
                   </div>
                   <p className="text-sm text-muted-foreground">
                     Member since{' '}

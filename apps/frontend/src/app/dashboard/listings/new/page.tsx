@@ -240,7 +240,7 @@ export default function NewListingPage() {
         verificationUrl: profileUrl,
         verificationCode,
       });
-      if (verifiedResult.data?.data === true || verifiedResult.data === true || verifiedResult === true) {
+      if (verifiedResult.data?.data === true || verifiedResult.data === true) {
         setVerified(true);
         setStep('details');
         toast({ title: 'Profile verified' });
