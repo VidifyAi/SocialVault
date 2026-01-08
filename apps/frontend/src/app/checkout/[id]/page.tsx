@@ -118,6 +118,10 @@ export default function CheckoutPage() {
         setTransactionId(txId);
       }
 
+      if (!txId) {
+        throw new Error('Failed to create or retrieve transaction');
+      }
+
       // Step 2: Create Razorpay order
       const orderResponse = await paymentsApi.createOrder(txId);
       const { orderId, amount, currency, keyId } = orderResponse.data.data;
