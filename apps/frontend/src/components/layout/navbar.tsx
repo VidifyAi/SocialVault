@@ -2,11 +2,12 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { Menu, X, MessageSquare, Bell } from 'lucide-react';
+import { Menu, X, MessageSquare } from 'lucide-react';
 import { useState } from 'react';
 import { SignedIn, SignedOut, UserButton } from '@clerk/nextjs';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
+import { NotificationBell } from '@/components/notification-bell';
 
 const navigation = [
   { name: 'Browse', href: '/browse' },
@@ -51,11 +52,7 @@ export function Navbar() {
         <div className="flex items-center space-x-4">
           <SignedIn>
             {/* Notifications */}
-            <Button variant="ghost" size="icon" asChild>
-              <Link href="/dashboard/notifications">
-                <Bell className="h-5 w-5" />
-              </Link>
-            </Button>
+            <NotificationBell />
 
             {/* Messages */}
             <Button variant="ghost" size="icon" asChild>

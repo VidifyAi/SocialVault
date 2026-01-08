@@ -3,6 +3,12 @@ import { config } from '../config';
 import { NotFoundError, ForbiddenError, BadRequestError } from '../utils/errors';
 import { Prisma } from '@prisma/client';
 import { TransactionStatus, EscrowStatus } from '@socialswapr/types';
+import { createNotifications } from '../utils/notifications';
+import { Server as SocketServer } from 'socket.io';
+import { emitNotification, emitTransactionUpdate } from '../websocket';
+import { createNotification } from '../utils/notifications';
+import { Server as SocketServer } from 'socket.io';
+import { emitNotification, emitTransactionUpdate } from '../websocket';
 
 // Platform-specific transfer steps
 const TRANSFER_STEPS = {
@@ -391,7 +397,23 @@ export class TransactionService {
       },
     });
 
-    // TODO: Create notifications for both parties
+    // Create notifications for both parties
+    await createNotifications([
+      {
+        userId: buyerId,
+        type: 'transaction_update',
+        title: 'Transaction Created',
+        message: `Transaction created for ${listing.displayName || listing.username}. Proceed to payment.`,
+        data: { transactionId: transaction.id },
+      },
+      {
+        userId: listing.sellerId,
+        type: 'transaction_update',
+        title: 'New Sale',
+        message: `Someone wants to buy ${listing.displayName || listing.username}. Waiting for payment.`,
+        data: { transactionId: transaction.id },
+      },
+    ]);
 
     return transaction;
   }
@@ -516,10 +538,15 @@ export class TransactionService {
     transactionId: string,
     stepNumber: number,
     userId: string,
-    data: { proofUrl?: string; notes?: string }
+    data: { proofUrl?: string; notes?: string },
+    io?: SocketServer
   ) {
     const transaction = await prisma.transaction.findUnique({
       where: { id: transactionId },
+      include: {
+        buyer: { select: { id: true, email: true, username: true } },
+        seller: { select: { id: true, email: true, username: true } },
+      },
     });
 
     if (!transaction) {
@@ -541,6 +568,9 @@ export class TransactionService {
     if (stepIndex === -1) {
       throw new BadRequestError('Invalid step number');
     }
+
+    const step = transferProgress[stepIndex];
+    const isSellerStep = userId === transaction.sellerId;
 
     // Update step
     transferProgress[stepIndex] = {
@@ -572,15 +602,69 @@ export class TransactionService {
       updates.status = 'transfer_completed';
     }
 
-    return prisma.transaction.update({
+    const updatedTransaction = await prisma.transaction.update({
       where: { id: transactionId },
       data: updates,
+      include: {
+        buyer: { select: { id: true, email: true, username: true } },
+        seller: { select: { id: true, email: true, username: true } },
+      },
     });
+
+    // Create notifications
+    const notifications = [];
+    const otherPartyId = isSellerStep ? transaction.buyerId : transaction.sellerId;
+    
+    notifications.push({
+      userId: otherPartyId,
+      type: 'transfer_step',
+      title: 'Transfer Step Completed',
+      message: `${isSellerStep ? 'Seller' : 'Buyer'} completed step ${stepNumber}: ${step.title}`,
+      data: { transactionId, stepNumber },
+    });
+
+    if (allComplete) {
+      notifications.push({
+        userId: transaction.buyerId,
+        type: 'transfer_completed',
+        title: 'Transfer Steps Complete',
+        message: 'All transfer steps are complete. Please verify account access and confirm.',
+        data: { transactionId },
+      });
+    }
+
+    if (notifications.length > 0) {
+      await createNotifications(notifications);
+      
+      // Emit WebSocket events
+      if (io) {
+        try {
+          notifications.forEach(notif => {
+            emitNotification(io, notif.userId, notif);
+          });
+          emitTransactionUpdate(io, transaction.buyerId, transaction.sellerId, {
+            transactionId,
+            status: updatedTransaction.status,
+            currentStep: updatedTransaction.currentStep,
+          });
+        } catch (error) {
+          // Log but don't fail
+          console.error('Failed to emit WebSocket events:', error);
+        }
+      }
+    }
+
+    return updatedTransaction;
   }
 
-  async confirmTransferComplete(transactionId: string, userId: string) {
+  async confirmTransferComplete(transactionId: string, userId: string, io?: SocketServer) {
     const transaction = await prisma.transaction.findUnique({
       where: { id: transactionId },
+      include: {
+        buyer: { select: { id: true, email: true, username: true } },
+        seller: { select: { id: true, email: true, username: true } },
+        listing: { select: { id: true, displayName: true, username: true } },
+      },
     });
 
     if (!transaction) {
@@ -597,7 +681,51 @@ export class TransactionService {
     }
 
     // Complete the transaction and release escrow
-    return this.updateStatus(transactionId, 'completed');
+    const completed = await this.updateStatus(transactionId, 'completed');
+
+    // Create notifications
+    await createNotifications([
+      {
+        userId: transaction.buyerId,
+        type: 'transaction_complete',
+        title: 'Transaction Complete',
+        message: `Your purchase of ${transaction.listing.displayName || transaction.listing.username} is complete!`,
+        data: { transactionId },
+      },
+      {
+        userId: transaction.sellerId,
+        type: 'payment_released',
+        title: 'Payment Released',
+        message: `Your payment has been released. Transaction completed successfully.`,
+        data: { transactionId },
+      },
+    ]);
+
+    // Emit WebSocket events
+    if (io) {
+      try {
+        emitNotification(io, transaction.buyerId, {
+          type: 'transaction_complete',
+          title: 'Transaction Complete',
+          message: 'Your purchase is complete!',
+          data: { transactionId },
+        });
+        emitNotification(io, transaction.sellerId, {
+          type: 'payment_released',
+          title: 'Payment Released',
+          message: 'Your payment has been released.',
+          data: { transactionId },
+        });
+        emitTransactionUpdate(io, transaction.buyerId, transaction.sellerId, {
+          transactionId,
+          status: 'completed',
+        });
+      } catch (error) {
+        console.error('Failed to emit WebSocket events:', error);
+      }
+    }
+
+    return completed;
   }
 
   async cancel(id: string, userId: string, reason: string) {

@@ -28,7 +28,7 @@ import { Separator } from '@/components/ui/separator';
 import { Checkbox } from '@/components/ui/checkbox';
 import { PlatformIcon, getPlatformName } from '@/components/platform-icon';
 import { formatCurrency, formatNumber } from '@/lib/utils';
-import { listingsApi, transactionsApi } from '@/lib/api';
+import { listingsApi, transactionsApi, paymentsApi } from '@/lib/api';
 import { useAuth } from '@/hooks/use-auth';
 import { useToast } from '@/hooks/use-toast';
 
@@ -55,6 +55,7 @@ export default function CheckoutPage() {
   const [loading, setLoading] = useState(true);
   const [processing, setProcessing] = useState(false);
   const [agreedToTerms, setAgreedToTerms] = useState(false);
+  const [transactionId, setTransactionId] = useState<string | null>(null);
 
   const platformFee = listing ? listing.price * 0.05 : 0;
   const total = listing ? listing.price + platformFee : 0;
@@ -97,7 +98,7 @@ export default function CheckoutPage() {
     }
   }, [params.id, isAuthenticated, user, router, toast]);
 
-  const handleCheckout = async () => {
+  const handlePayment = async () => {
     if (!agreedToTerms) {
       toast({
         title: 'Terms required',
@@ -109,19 +110,98 @@ export default function CheckoutPage() {
 
     setProcessing(true);
     try {
-      const response = await transactionsApi.create(listing!.id);
-      toast({
-        title: 'Transaction created!',
-        description: 'You will be redirected to complete the payment.',
+      // Step 1: Create transaction if not exists
+      let txId = transactionId;
+      if (!txId) {
+        const txResponse = await transactionsApi.create(listing!.id);
+        txId = txResponse.data.data.id;
+        setTransactionId(txId);
+      }
+
+      // Step 2: Create Razorpay order
+      const orderResponse = await paymentsApi.createOrder(txId);
+      const { orderId, amount, currency, keyId } = orderResponse.data.data;
+
+      // Step 3: Check if Razorpay is loaded
+      if (typeof window === 'undefined' || !(window as any).Razorpay) {
+        toast({
+          title: 'Payment system loading',
+          description: 'Please wait a moment and try again',
+          variant: 'destructive',
+        });
+        setProcessing(false);
+        return;
+      }
+
+      // Step 4: Open Razorpay Checkout
+      const Razorpay = (window as any).Razorpay;
+      const options = {
+        key: keyId,
+        amount: amount, // Amount in paise
+        currency: currency,
+        name: 'SocialVault',
+        description: `Purchase: ${listing!.title}`,
+        order_id: orderId,
+        handler: async function (response: any) {
+          // Step 5: Verify payment on backend
+          try {
+            await paymentsApi.verify({
+              transactionId: txId!,
+              razorpayOrderId: response.razorpay_order_id,
+              razorpayPaymentId: response.razorpay_payment_id,
+              razorpaySignature: response.razorpay_signature,
+            });
+
+            toast({
+              title: 'Payment successful!',
+              description: 'Redirecting to transaction...',
+            });
+            router.push(`/dashboard/transactions/${txId}`);
+          } catch (error: any) {
+            console.error('Payment verification error:', error);
+            toast({
+              title: 'Payment verification failed',
+              description: error.response?.data?.error || 'Please contact support with your payment ID',
+              variant: 'destructive',
+            });
+            // Still redirect to transaction page so user can see status
+            router.push(`/dashboard/transactions/${txId}`);
+          }
+        },
+        prefill: {
+          name: user?.firstName || user?.username || '',
+          email: user?.email || '',
+        },
+        theme: {
+          color: '#0ea5e9',
+        },
+        modal: {
+          ondismiss: function () {
+            setProcessing(false);
+          },
+        },
+      };
+
+      const razorpay = new Razorpay(options);
+      
+      razorpay.on('payment.failed', function (response: any) {
+        console.error('Payment failed:', response);
+        toast({
+          title: 'Payment failed',
+          description: response.error?.description || 'Please try again or contact support',
+          variant: 'destructive',
+        });
+        setProcessing(false);
       });
-      router.push(`/dashboard/transactions/${response.data.id}`);
+
+      razorpay.open();
     } catch (error: any) {
+      console.error('Payment initiation error:', error);
       toast({
         title: 'Error',
-        description: error.response?.data?.message || 'Failed to create transaction',
+        description: error.response?.data?.error || 'Failed to initiate payment. Please try again.',
         variant: 'destructive',
       });
-    } finally {
       setProcessing(false);
     }
   };
@@ -233,51 +313,19 @@ export default function CheckoutPage() {
                 <div className="flex items-center gap-3">
                   <CreditCard className="h-6 w-6" />
                   <div>
-                    <p className="font-medium">Credit / Debit Card</p>
+                    <p className="font-medium">Secure Payment via Razorpay</p>
                     <p className="text-sm text-muted-foreground">
-                      Visa, Mastercard, American Express
+                      Credit/Debit Cards, UPI, Net Banking, Wallets
                     </p>
                   </div>
                 </div>
               </div>
 
-              <div className="space-y-4">
-                <div className="space-y-2">
-                  <Label htmlFor="cardNumber">Card Number</Label>
-                  <Input
-                    id="cardNumber"
-                    placeholder="1234 5678 9012 3456"
-                    disabled={processing}
-                  />
-                </div>
-
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="expiry">Expiry Date</Label>
-                    <Input
-                      id="expiry"
-                      placeholder="MM/YY"
-                      disabled={processing}
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="cvc">CVC</Label>
-                    <Input
-                      id="cvc"
-                      placeholder="123"
-                      disabled={processing}
-                    />
-                  </div>
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="name">Cardholder Name</Label>
-                  <Input
-                    id="name"
-                    placeholder="John Doe"
-                    disabled={processing}
-                  />
-                </div>
+              <div className="bg-blue-50 dark:bg-blue-950/20 border border-blue-200 dark:border-blue-900/50 rounded-lg p-4">
+                <p className="text-sm text-blue-900 dark:text-blue-100">
+                  <strong>Secure Payment:</strong> Clicking &quot;Pay&quot; will open Razorpay&apos;s secure payment gateway. 
+                  Your card details are never stored on our servers.
+                </p>
               </div>
 
               <Separator />
@@ -306,15 +354,20 @@ export default function CheckoutPage() {
               <Button
                 className="w-full"
                 size="lg"
-                onClick={handleCheckout}
+                onClick={handlePayment}
                 disabled={processing || !agreedToTerms}
               >
                 {processing ? (
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Processing...
+                  </>
                 ) : (
-                  <Lock className="mr-2 h-4 w-4" />
+                  <>
+                    <Lock className="mr-2 h-4 w-4" />
+                    Pay {formatCurrency(total)}
+                  </>
                 )}
-                Pay {formatCurrency(total)}
               </Button>
               <div className="flex items-center gap-2 text-xs text-muted-foreground">
                 <Lock className="h-3 w-3" />

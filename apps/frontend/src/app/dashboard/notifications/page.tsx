@@ -22,7 +22,7 @@ import {
 } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { formatRelativeTime } from '@/lib/utils';
-import api from '@/lib/api';
+import { usersApi } from '@/lib/api';
 
 interface Notification {
   id: string;
@@ -53,48 +53,45 @@ export default function NotificationsPage() {
 
   const fetchNotifications = async () => {
     try {
-      const response = await api.get('/users/notifications');
-      setNotifications(response.data || []);
+      const response = await usersApi.getNotifications();
+      const notifs = response.data?.data || [];
+      // Map to match expected interface
+      setNotifications(notifs.map((n: any) => ({
+        id: n.id,
+        type: n.type,
+        title: n.title,
+        message: n.message,
+        link: getNotificationLink(n),
+        isRead: n.read,
+        createdAt: n.createdAt,
+      })));
     } catch (error) {
       console.error('Failed to fetch notifications:', error);
-      // Demo data
-      setNotifications([
-        {
-          id: '1',
-          type: 'offer',
-          title: 'New offer received',
-          message: 'You received a new offer of $5,000 on your Instagram account',
-          link: '/dashboard/offers',
-          isRead: false,
-          createdAt: new Date().toISOString(),
-        },
-        {
-          id: '2',
-          type: 'message',
-          title: 'New message',
-          message: '@buyer123 sent you a message',
-          link: '/dashboard/messages',
-          isRead: false,
-          createdAt: new Date(Date.now() - 3600000).toISOString(),
-        },
-        {
-          id: '3',
-          type: 'transaction',
-          title: 'Transaction completed',
-          message: 'Your sale of TikTok account has been completed',
-          link: '/dashboard/transactions',
-          isRead: true,
-          createdAt: new Date(Date.now() - 86400000).toISOString(),
-        },
-      ]);
+      setNotifications([]);
     } finally {
       setLoading(false);
     }
   };
 
+  const getNotificationLink = (notification: any): string => {
+    if (notification.data?.transactionId) {
+      return `/dashboard/transactions/${notification.data.transactionId}`;
+    }
+    if (notification.data?.listingId) {
+      return `/listing/${notification.data.listingId}`;
+    }
+    if (notification.data?.offerId) {
+      return '/dashboard/offers';
+    }
+    if (notification.type === 'message_new') {
+      return '/dashboard/messages';
+    }
+    return '/dashboard/notifications';
+  };
+
   const markAsRead = async (id: string) => {
     try {
-      await api.post(`/users/notifications/${id}/read`);
+      await usersApi.markNotificationAsRead(id);
       setNotifications(
         notifications.map((n) =>
           n.id === id ? { ...n, isRead: true } : n
@@ -107,7 +104,7 @@ export default function NotificationsPage() {
 
   const markAllAsRead = async () => {
     try {
-      await api.post('/users/notifications/read-all');
+      await usersApi.markAllNotificationsAsRead();
       setNotifications(notifications.map((n) => ({ ...n, isRead: true })));
     } catch (error) {
       console.error('Failed to mark all as read:', error);

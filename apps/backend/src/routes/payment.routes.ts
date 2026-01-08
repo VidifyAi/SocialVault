@@ -2,9 +2,11 @@
 // Handles payment creation, verification, and webhooks
 
 import { Router, Response } from 'express';
+import { Server as SocketServer } from 'socket.io';
 import { paymentService } from '../services/payment.service';
 import { authenticate, AuthenticatedRequest } from '../middleware/auth';
 import { prisma } from '../lib/prisma';
+import { io } from '../index';
 
 const router: Router = Router();
 
@@ -99,7 +101,7 @@ router.post('/verify', authenticate, async (req: AuthenticatedRequest, res: Resp
       razorpayOrderId,
       razorpayPaymentId,
       razorpaySignature,
-    });
+    }, io);
 
     res.json({ 
       success: true, 
@@ -205,7 +207,7 @@ router.post('/:transactionId/release', authenticate, async (req: AuthenticatedRe
     }
 
     // Release escrow
-    const updatedTransaction = await paymentService.releaseEscrow(transactionId);
+    const updatedTransaction = await paymentService.releaseEscrow(transactionId, req.user!.id, io);
 
     res.json({ success: true, data: updatedTransaction });
   } catch (error: any) {
