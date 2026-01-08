@@ -9,6 +9,18 @@ const isPublicRoute = createRouteMatcher([
   '/sign-in(.*)',
   '/sign-up(.*)',
   '/api/webhooks(.*)',
+  '/how-it-works',
+  '/pricing',
+  '/sell',
+  '/guides(.*)',
+  '/verification',
+  '/contact',
+  '/help',
+  '/faq',
+  '/disputes',
+  '/terms',
+  '/cookies',
+  '/privacy',
 ]);
 
 // Use Clerk's built-in protection to avoid mutating immutable headers
