@@ -41,6 +41,18 @@ import { formatCurrency, formatRelativeTime } from '@/lib/utils';
 import { transactionsApi } from '@/lib/api';
 import { useAuth } from '@/hooks/use-auth';
 import { useToast } from '@/hooks/use-toast';
+import { TransferStepForm } from '@/components/transfer-step-form';
+
+interface TransferStep {
+  stepNumber: number;
+  title: string;
+  description: string;
+  instructions: string[];
+  status: 'pending' | 'in_progress' | 'completed' | 'failed';
+  completedAt?: string;
+  proofUrl?: string;
+  notes?: string;
+}
 
 interface Transaction {
   id: string;
@@ -48,7 +60,9 @@ interface Transaction {
   amount: number;
   platformFee: number;
   escrowStatus: string;
+  paymentStatus: string;
   currentStep: number;
+  transferProgress?: TransferStep[];
   createdAt: string;
   updatedAt: string;
   listing: {
@@ -76,19 +90,23 @@ interface Transaction {
 }
 
 const statusSteps = [
+  { key: 'initiated', label: 'Initiated' },
   { key: 'payment_pending', label: 'Payment Pending' },
-  { key: 'payment_confirmed', label: 'Payment Confirmed' },
-  { key: 'transfer_pending', label: 'Transfer In Progress' },
-  { key: 'verification_pending', label: 'Verification' },
+  { key: 'escrow_funded', label: 'Payment Confirmed' },
+  { key: 'transfer_in_progress', label: 'Transfer In Progress' },
+  { key: 'transfer_completed', label: 'Transfer Complete' },
   { key: 'completed', label: 'Completed' },
 ];
 
 const statusColors: Record<string, 'default' | 'secondary' | 'destructive' | 'success' | 'warning'> = {
+  initiated: 'secondary',
   pending: 'warning',
   payment_pending: 'warning',
-  payment_confirmed: 'secondary',
-  in_progress: 'default',
-  transfer_pending: 'default',
+  payment_processing: 'warning',
+  payment_failed: 'destructive',
+  escrow_funded: 'secondary',
+  transfer_in_progress: 'default',
+  transfer_completed: 'default',
   verification_pending: 'default',
   completed: 'success',
   disputed: 'destructive',
@@ -117,7 +135,9 @@ export default function TransactionDetailPage() {
   const fetchTransaction = async () => {
     try {
       const response = await transactionsApi.getById(params.id as string);
-      setTransaction(response.data);
+      // Handle both response.data.data and response.data structures
+      const transactionData = response.data?.data || response.data;
+      setTransaction(transactionData);
     } catch (error) {
       console.error('Failed to fetch transaction:', error);
       toast({
@@ -362,6 +382,171 @@ export default function TransactionDetailPage() {
           </CardFooter>
         </Card>
 
+        {/* Transfer Workflow */}
+        {(transaction.status === 'escrow_funded' || 
+          transaction.status === 'transfer_in_progress' || 
+          transaction.status === 'transfer_completed') && 
+          transaction.transferProgress && 
+          transaction.transferProgress.length > 0 && (
+          <Card className="lg:col-span-2">
+            <CardHeader>
+              <CardTitle>Transfer Process</CardTitle>
+              <CardDescription>
+                Follow these steps to complete the account transfer
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-6">
+              {transaction.transferProgress.map((step, index) => {
+                const stepNumber = step.stepNumber || index + 1;
+                const isCompleted = step.status === 'completed';
+                const isCurrent = step.status === 'in_progress';
+                const isPending = step.status === 'pending';
+                
+                // Determine who performs this step (first 2-3 steps typically seller)
+                // This is a heuristic - you may want to make this more explicit
+                const isSellerStep = stepNumber <= 2;
+                const canPerformStep = (isSeller && isSellerStep) || (isBuyer && !isSellerStep);
+                
+                return (
+                  <div
+                    key={stepNumber}
+                    className={`p-4 rounded-lg border-2 ${
+                      isCompleted
+                        ? 'border-green-500 bg-green-50 dark:bg-green-950/20'
+                        : isCurrent
+                        ? 'border-primary bg-primary/5'
+                        : 'border-muted bg-muted/50'
+                    }`}
+                  >
+                    <div className="flex items-start gap-4">
+                      <div
+                        className={`flex-shrink-0 w-10 h-10 rounded-full flex items-center justify-center ${
+                          isCompleted
+                            ? 'bg-green-500 text-white'
+                            : isCurrent
+                            ? 'bg-primary text-primary-foreground'
+                            : 'bg-muted text-muted-foreground'
+                        }`}
+                      >
+                        {isCompleted ? (
+                          <CheckCircle className="h-5 w-5" />
+                        ) : (
+                          <span className="font-medium">{stepNumber}</span>
+                        )}
+                      </div>
+                      
+                      <div className="flex-1">
+                        <div className="flex items-center justify-between mb-2">
+                          <h3 className="font-semibold">{step.title}</h3>
+                          <Badge variant={isCompleted ? 'default' : isCurrent ? 'secondary' : 'outline'}>
+                            {isCompleted ? 'Completed' : isCurrent ? 'In Progress' : 'Pending'}
+                          </Badge>
+                        </div>
+                        
+                        <p className="text-sm text-muted-foreground mb-3">
+                          {step.description}
+                        </p>
+                        
+                        {step.instructions && step.instructions.length > 0 && (
+                          <ol className="list-decimal list-inside space-y-1 text-sm mb-3">
+                            {step.instructions.map((instruction, i) => (
+                              <li key={i}>{instruction}</li>
+                            ))}
+                          </ol>
+                        )}
+                        
+                        {isCurrent && (
+                          <div className="mt-4 space-y-3">
+                            {canPerformStep ? (
+                              <TransferStepForm
+                                transactionId={transaction.id}
+                                stepNumber={stepNumber}
+                                onComplete={fetchTransaction}
+                              />
+                            ) : (
+                              <p className="text-sm text-muted-foreground italic">
+                                Waiting for {isSellerStep ? 'seller' : 'buyer'} to complete this step...
+                              </p>
+                            )}
+                          </div>
+                        )}
+                        
+                        {isCompleted && step.proofUrl && (
+                          <div className="mt-3">
+                            <a
+                              href={step.proofUrl}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="text-sm text-primary hover:underline"
+                            >
+                              View proof →
+                            </a>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </CardContent>
+          </Card>
+        )}
+
+        {/* Buyer Confirmation (when all steps complete) */}
+        {isBuyer && 
+          transaction.status === 'transfer_completed' && (
+          <Card className="lg:col-span-2 border-green-500">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <CheckCircle className="h-5 w-5 text-green-500" />
+                Transfer Complete - Confirm & Release Payment
+              </CardTitle>
+              <CardDescription>
+                Verify you have full access to the account, then confirm to release payment to seller.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="bg-yellow-50 dark:bg-yellow-950/20 border border-yellow-200 dark:border-yellow-900/50 rounded-lg p-4">
+                <p className="text-sm font-medium mb-2">Before confirming:</p>
+                <ul className="list-disc list-inside space-y-1 text-sm text-muted-foreground">
+                  <li>You can log in to the account</li>
+                  <li>You have changed email/phone/password</li>
+                  <li>You have removed seller&apos;s access</li>
+                  <li>You have set up your own 2FA</li>
+                </ul>
+              </div>
+              
+              <Button
+                onClick={handleConfirmTransfer}
+                disabled={processing}
+                className="w-full"
+                size="lg"
+              >
+                {processing ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Confirming...
+                  </>
+                ) : (
+                  <>
+                    <CheckCircle className="mr-2 h-4 w-4" />
+                    Confirm Transfer & Release Payment
+                  </>
+                )}
+              </Button>
+              
+              <Button
+                variant="outline"
+                onClick={() => setShowDisputeDialog(true)}
+                className="w-full"
+              >
+                <AlertTriangle className="mr-2 h-4 w-4" />
+                Something Wrong? Open Dispute
+              </Button>
+            </CardContent>
+          </Card>
+        )}
+
         {/* Credentials (shown during transfer) */}
         {transaction.credentials && (transaction.status === 'transfer_pending' || transaction.status === 'verification_pending') && (
           <Card className="lg:col-span-2">
@@ -449,15 +634,7 @@ export default function TransactionDetailPage() {
           </CardHeader>
           <CardContent>
             <div className="flex flex-wrap gap-4">
-              {isBuyer && transaction.status === 'verification_pending' && (
-                <Button onClick={handleConfirmTransfer} disabled={processing}>
-                  {processing && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                  <CheckCircle className="mr-2 h-4 w-4" />
-                  Confirm Transfer & Release Payment
-                </Button>
-              )}
-
-              {['transfer_pending', 'verification_pending'].includes(transaction.status) && (
+              {['transfer_in_progress', 'transfer_completed'].includes(transaction.status) && (
                 <Dialog open={showDisputeDialog} onOpenChange={setShowDisputeDialog}>
                   <DialogTrigger asChild>
                     <Button variant="destructive">

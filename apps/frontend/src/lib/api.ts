@@ -100,6 +100,12 @@ export const transactionsApi = {
     api.patch(`/transactions/${id}/status`, { status }),
   completeStep: (id: string, step: string) =>
     api.post(`/transactions/${id}/complete-step`, { step }),
+  completeTransferStep: (id: string, stepNumber: number, formData: FormData) =>
+    api.post(`/transactions/${id}/transfer/steps/${stepNumber}/complete`, formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    }),
+  getTransferStatus: (id: string) =>
+    api.get(`/transactions/${id}/transfer/status`),
   dispute: (id: string, reason: string) =>
     api.post(`/transactions/${id}/dispute`, { reason }),
   confirmTransfer: (id: string) => api.post(`/transactions/${id}/confirm-transfer`),
@@ -139,6 +145,11 @@ export const usersApi = {
   }) => api.patch('/users/me', data),
   getPublicProfile: (username: string) => api.get(`/users/${username}`),
   getDashboardStats: () => api.get('/users/dashboard-stats'),
+  getNotifications: (params?: { page?: number; limit?: number; unreadOnly?: boolean }) =>
+    api.get('/users/notifications', { params }),
+  getUnreadCount: () => api.get('/users/notifications/unread-count'),
+  markNotificationAsRead: (id: string) => api.post(`/users/notifications/${id}/read`),
+  markAllNotificationsAsRead: () => api.post('/users/notifications/read-all'),
 };
 
 export const reviewsApi = {
@@ -146,6 +157,21 @@ export const reviewsApi = {
     api.post('/reviews', { transactionId, rating, comment }),
   getForUser: (userId: string) => api.get(`/reviews/user/${userId}`),
   getForListing: (listingId: string) => api.get(`/reviews/listing/${listingId}`),
+};
+
+export const paymentsApi = {
+  createOrder: (transactionId: string) =>
+    api.post('/payments/create-order', { transactionId }),
+  verify: (data: {
+    transactionId: string;
+    razorpayOrderId: string;
+    razorpayPaymentId: string;
+    razorpaySignature: string;
+  }) => api.post('/payments/verify', data),
+  getStatus: (transactionId: string) =>
+    api.get(`/payments/${transactionId}/status`),
+  releaseEscrow: (transactionId: string) =>
+    api.post(`/payments/${transactionId}/release`),
 };
 
 // Export both as named and default for flexibility

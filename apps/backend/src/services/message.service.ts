@@ -7,6 +7,7 @@ import {
   getSeverityLevel,
   FilterResult 
 } from '../utils/messageFilter';
+import { createNotifications } from '../utils/notifications';
 
 interface CreateMessageData {
   senderId: string;
@@ -121,8 +122,33 @@ export class MessageService {
       data: { lastMessageAt: new Date() },
     });
 
-    // TODO: Send real-time notification via WebSocket
-    // TODO: Send push notification
+    // Get recipient ID from conversation
+    const conversation = await prisma.conversation.findUnique({
+      where: { id: conversationId },
+      include: {
+        participants: {
+          where: { userId: { not: data.senderId } },
+          select: { userId: true },
+        },
+      },
+    });
+
+    if (conversation && conversation.participants.length > 0) {
+      const recipientId = conversation.participants[0].userId;
+      
+      // Create notification for recipient
+      await createNotifications([
+        {
+          userId: recipientId,
+          type: 'message_new',
+          title: 'New Message',
+          message: `You have a new message from ${message.sender.username}`,
+          data: { conversationId, messageId: message.id },
+        },
+      ]);
+    }
+
+    // Emit WebSocket event (handled by websocket service)
 
     // Return message with warning if flagged
     return {

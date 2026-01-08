@@ -1,5 +1,8 @@
 import { prisma } from '../lib/prisma';
 import { NotFoundError, ForbiddenError, BadRequestError } from '../utils/errors';
+import { createNotifications } from '../utils/notifications';
+import { Server as SocketServer } from 'socket.io';
+import { emitNotification } from '../websocket';
 
 interface CreateOfferData {
   listingId: string;
@@ -76,8 +79,16 @@ export class OfferService {
       },
     });
 
-    // TODO: Create notification for seller
-    // TODO: Send email notification
+    // Create notification for seller
+    await createNotifications([
+      {
+        userId: listing.sellerId,
+        type: 'offer_received',
+        title: 'New Offer Received',
+        message: `You received an offer of ₹${offer.amount} for ${listing.displayName || listing.username}`,
+        data: { offerId: offer.id, listingId: listing.id },
+      },
+    ]);
 
     return offer;
   }
@@ -218,7 +229,16 @@ export class OfferService {
         data: { status: 'rejected' },
       });
 
-      // TODO: Create notification for buyer
+      // Create notification for buyer
+      await createNotifications([
+        {
+          userId: offer.buyerId,
+          type: 'offer_accepted',
+          title: 'Offer Accepted',
+          message: `Your offer of ₹${offer.amount} has been accepted!`,
+          data: { offerId: offer.id, listingId: offer.listingId },
+        },
+      ]);
 
       return updatedOffer;
     }
@@ -229,7 +249,16 @@ export class OfferService {
         data: { status: 'rejected' },
       });
 
-      // TODO: Create notification for buyer
+      // Create notification for buyer
+      await createNotifications([
+        {
+          userId: offer.buyerId,
+          type: 'offer_rejected',
+          title: 'Offer Rejected',
+          message: `Your offer of ₹${offer.amount} was rejected.`,
+          data: { offerId: offer.id, listingId: offer.listingId },
+        },
+      ]);
 
       return updatedOffer;
     }

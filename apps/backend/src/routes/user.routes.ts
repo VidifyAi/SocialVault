@@ -4,6 +4,7 @@ import { authenticate, authorize, AuthenticatedRequest } from '../middleware/aut
 import { validate } from '../middleware/validate';
 import { updateProfileSchema } from '../validators/schemas';
 import { NotFoundError } from '../utils/errors';
+import { markNotificationAsRead, getUnreadCount } from '../utils/notifications';
 
 const router: Router = Router();
 
@@ -474,6 +475,127 @@ router.put(
       res.json({
         success: true,
         data: user,
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
+// ==================== NOTIFICATIONS ====================
+
+// GET /users/notifications - Get current user's notifications
+router.get(
+  '/notifications',
+  authenticate,
+  async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
+    try {
+      const page = parseInt(req.query.page as string, 10) || 1;
+      const limit = parseInt(req.query.limit as string, 10) || 20;
+      const skip = (page - 1) * limit;
+      const unreadOnly = req.query.unreadOnly === 'true';
+
+      const where: any = { userId: req.user!.userId };
+      if (unreadOnly) {
+        where.read = false;
+      }
+
+      const [notifications, total] = await Promise.all([
+        prisma.notification.findMany({
+          where,
+          orderBy: { createdAt: 'desc' },
+          skip,
+          take: limit,
+        }),
+        prisma.notification.count({ where }),
+      ]);
+
+      res.json({
+        success: true,
+        data: notifications,
+        meta: {
+          page,
+          limit,
+          total,
+          totalPages: Math.ceil(total / limit),
+        },
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
+// GET /users/notifications/unread-count - Get unread notification count
+router.get(
+  '/notifications/unread-count',
+  authenticate,
+  async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
+    try {
+      const count = await getUnreadCount(req.user!.userId);
+      res.json({
+        success: true,
+        data: { count },
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
+// POST /users/notifications/:id/read - Mark notification as read
+router.post(
+  '/notifications/:id/read',
+  authenticate,
+  async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
+    try {
+      // Verify notification belongs to user
+      const notification = await prisma.notification.findUnique({
+        where: { id: req.params.id },
+      });
+
+      if (!notification) {
+        throw new NotFoundError('Notification');
+      }
+
+      if (notification.userId !== req.user!.userId) {
+        return res.status(403).json({
+          success: false,
+          error: 'Not authorized',
+        });
+      }
+
+      await markNotificationAsRead(req.params.id, req.user!.userId);
+
+      res.json({
+        success: true,
+        data: { id: req.params.id, read: true },
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
+// POST /users/notifications/read-all - Mark all notifications as read
+router.post(
+  '/notifications/read-all',
+  authenticate,
+  async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
+    try {
+      await prisma.notification.updateMany({
+        where: {
+          userId: req.user!.userId,
+          read: false,
+        },
+        data: {
+          read: true,
+        },
+      });
+
+      res.json({
+        success: true,
+        data: { message: 'All notifications marked as read' },
       });
     } catch (error) {
       next(error);

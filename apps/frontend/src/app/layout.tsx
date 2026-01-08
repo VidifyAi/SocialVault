@@ -26,6 +26,9 @@ export default function RootLayout({
       signUpFallbackRedirectUrl="/dashboard"
     >
       <html lang="en" suppressHydrationWarning>
+        <head>
+          <script src="https://checkout.razorpay.com/v1/checkout.js" async></script>
+        </head>
         <body className={`${inter.variable} font-sans antialiased`}>
           <Providers>
             <div className="flex min-h-screen flex-col">

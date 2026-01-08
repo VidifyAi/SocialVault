@@ -1,13 +1,31 @@
 import { Router, Response, NextFunction } from 'express';
+import multer from 'multer';
 import { transactionService } from '../services/transaction.service';
+import { uploadService } from '../services/upload.service';
 import { validate } from '../middleware/validate';
 import { authenticate, AuthenticatedRequest } from '../middleware/auth';
 import { 
   initiateTransactionSchema, 
   updateTransferStepSchema 
 } from '../validators/schemas';
+import { io } from '../index';
 
 const router: Router = Router();
+
+// Configure multer for file uploads
+const upload = multer({
+  storage: multer.memoryStorage(),
+  limits: {
+    fileSize: 10 * 1024 * 1024, // 10MB max
+  },
+  fileFilter: (req, file, cb) => {
+    if (file.mimetype.startsWith('image/') || file.mimetype === 'application/pdf') {
+      cb(null, true);
+    } else {
+      cb(new Error('Only images and PDFs are allowed'));
+    }
+  },
+});
 
 // GET /transactions - Get my transactions
 router.get(
@@ -97,18 +115,66 @@ router.post(
 router.post(
   '/:id/transfer/steps/:stepNumber/complete',
   authenticate,
-  validate(updateTransferStepSchema),
+  upload.single('proof'),
   async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
     try {
+      let proofUrl: string | undefined;
+      
+      // Upload proof file if provided
+      if (req.file) {
+        const uploadResult = await uploadService.uploadTransferProof(
+          req.file.buffer,
+          req.file.originalname,
+          req.file.mimetype,
+          req.params.id,
+          parseInt(req.params.stepNumber, 10)
+        );
+        proofUrl = uploadResult.url;
+      }
+
       const transaction = await transactionService.completeTransferStep(
         req.params.id,
         parseInt(req.params.stepNumber, 10),
         req.user!.userId,
-        req.body
+        {
+          proofUrl,
+          notes: req.body.notes,
+        },
+        io
       );
       res.json({
         success: true,
         data: transaction,
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
+// GET /transactions/:id/transfer/status - Get transfer status and steps
+router.get(
+  '/:id/transfer/status',
+  authenticate,
+  async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
+    try {
+      const transaction = await transactionService.getById(
+        req.params.id,
+        req.user!.userId
+      );
+      
+      const transferProgress = transaction.transferProgress as any[];
+      const currentStep = transferProgress.find((s) => s.status === 'in_progress');
+      
+      res.json({
+        success: true,
+        data: {
+          currentStep: transaction.currentStep,
+          totalSteps: transferProgress.length,
+          steps: transferProgress,
+          status: transaction.status,
+          escrowStatus: transaction.escrowStatus,
+        },
       });
     } catch (error) {
       next(error);
@@ -124,7 +190,8 @@ router.post(
     try {
       const transaction = await transactionService.confirmTransferComplete(
         req.params.id,
-        req.user!.userId
+        req.user!.userId,
+        io
       );
       res.json({
         success: true,
