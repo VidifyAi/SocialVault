@@ -83,6 +83,11 @@ export const listingsApi = {
     id: string,
     payload: { verificationUrl: string; method?: string }
   ) => api.post(`/listings/${id}/verify`, payload),
+  getVerificationCode: () => api.get('/listings/verification-code'),
+  profilePreview: (payload: { profileUrl: string }) =>
+    api.post('/listings/profile-preview', payload),
+  verifyProfile: (payload: { verificationUrl: string; verificationCode: string }) =>
+    api.post('/listings/verify-profile', payload),
 };
 
 export const transactionsApi = {

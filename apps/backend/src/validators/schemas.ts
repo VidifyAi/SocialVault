@@ -56,6 +56,9 @@ export const createListingSchema = z.object({
     accountAge: z.coerce.number().min(1, 'Account age must be at least 1 month').optional(),
     monthlyRevenue: z.coerce.number().optional(),
     transferSteps: z.string().optional(), // JSON string
+    profileUrl: z.string().url().optional(),
+    verificationCode: z.string().optional(),
+    verificationUrl: z.string().url().optional(),
     
     // Backend structured fields (for API clients)
     username: z.string().optional(),

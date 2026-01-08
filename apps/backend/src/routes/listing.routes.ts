@@ -72,6 +72,56 @@ router.get(
   }
 );
 
+// GET /listings/verification-code - generate a verification code for ownership proof
+router.get(
+  '/verification-code',
+  authenticate,
+  async (_req: AuthenticatedRequest, res: Response, next: NextFunction) => {
+    try {
+      const code = await listingService.generateVerificationCode();
+      res.json({ success: true, data: { code } });
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
+// POST /listings/profile-preview - fetch public profile info for prefill
+router.post(
+  '/profile-preview',
+  authenticate,
+  async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
+    try {
+      const { profileUrl } = req.body;
+      if (!profileUrl) {
+        return res.status(400).json({ success: false, error: 'profileUrl is required' });
+      }
+      const preview = await listingService.getProfilePreview(profileUrl);
+      res.json({ success: true, data: preview });
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
+// POST /listings/verify-profile - verify ownership code on public profile
+router.post(
+  '/verify-profile',
+  authenticate,
+  async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
+    try {
+      const { verificationUrl, verificationCode } = req.body;
+      if (!verificationUrl || !verificationCode) {
+        return res.status(400).json({ success: false, error: 'verificationUrl and verificationCode are required' });
+      }
+      const result = await listingService.verifyProfile(verificationUrl, verificationCode);
+      res.json({ success: true, data: result });
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
 // GET /listings/favorites - Get user's favorite listings
 router.get(
   '/favorites',

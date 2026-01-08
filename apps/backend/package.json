@@ -19,6 +19,7 @@
     "@clerk/backend": "^1.0.0",
     "@prisma/client": "^5.8.0",
     "@socialswapr/types": "workspace:*",
+    "axios": "^1.6.5",
     "bcryptjs": "^2.4.3",
     "cors": "^2.8.5",
     "dotenv": "^16.3.1",

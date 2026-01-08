@@ -16,6 +16,7 @@ import reviewRouter from './routes/review.routes';
 import { adminRouter } from './routes/admin.routes';
 import { paymentRouter } from './routes/payment.routes';
 import { uploadRouter } from './routes/upload.routes';
+import scraperRouter from './routes/scraper.routes';
 import { setupWebSocket } from './websocket';
 import { prisma } from './lib/prisma';
 
@@ -63,6 +64,7 @@ app.use('/api/v1/reviews', reviewRouter);
 app.use('/api/v1/admin', adminRouter);
 app.use('/api/v1/payments', paymentRouter);
 app.use('/api/v1/uploads', uploadRouter);
+app.use('/api/v1/scrape', scraperRouter);
 
 // Also support /api routes without version
 app.use('/api/users', userRouter);
@@ -74,6 +76,7 @@ app.use('/api/reviews', reviewRouter);
 app.use('/api/admin', adminRouter);
 app.use('/api/payments', paymentRouter);
 app.use('/api/uploads', uploadRouter);
+app.use('/api/scrape', scraperRouter);
 
 // Error handler
 app.use(errorHandler);
