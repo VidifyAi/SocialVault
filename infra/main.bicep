@@ -185,3 +185,8 @@ output redisPrimaryKey string = includeRedis ? listKeys(redis.id, '2023-08-01').
 output redisHostname string = includeRedis ? redis.properties.hostName : ''
 output apiUrl string = 'https://${apiAppName}.azurewebsites.net'
 output webUrl string = 'https://${webAppName}.azurewebsites.net'
+// Also expose app names and resource IDs for CLI workflows
+output apiAppName string = apiAppName
+output webAppName string = webAppName
+output apiAppResourceId string = apiApp.id
+output webAppResourceId string = webApp.id

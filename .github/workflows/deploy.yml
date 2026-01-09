@@ -1,105 +1,96 @@
-name: Deploy to Azure
+name: Deploy Infra and Apps
 
 on:
-  push:
-    branches:
-      - main
-
-env:
-  ACR_NAME: ${{ secrets.ACR_NAME }}
-  BACKEND_WEBAPP: ${{ secrets.BACKEND_WEBAPP }}
-  FRONTEND_WEBAPP: ${{ secrets.FRONTEND_WEBAPP }}
-  AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
-  AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
-  AZURE_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+  workflow_dispatch:
+    inputs:
+      resourceGroup:
+        description: 'Azure Resource Group name'
+        required: true
+      baseName:
+        description: 'Base name for resources (matches Bicep)'
+        required: false
+        default: 'socialswapr'
 
 jobs:
-  build-and-deploy:
+  deploy:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
     permissions:
       id-token: write
       contents: read
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout
+        uses: actions/checkout@v4
 
-      - name: Azure Login (OIDC)
+      - name: Azure Login
         uses: azure/login@v2
         with:
-          client-id: ${{ env.AZURE_CLIENT_ID }}
-          tenant-id: ${{ env.AZURE_TENANT_ID }}
-          subscription-id: ${{ env.AZURE_SUBSCRIPTION_ID }}
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+
+      - name: Deploy infra (Bicep) and capture outputs
+        env:
+          AZURE_RESOURCE_GROUP: ${{ github.event.inputs.resourceGroup }}
+          BASE_NAME: ${{ github.event.inputs.baseName }}
+          FRONTEND_URL: ${{ secrets.FRONTEND_URL }}
+          API_BASE_URL: ${{ secrets.API_BASE_URL }}
+        run: |
+          az deployment group create \
+            --resource-group "$AZURE_RESOURCE_GROUP" \
+            --template-file infra/main.bicep \
+            --parameters baseName="$BASE_NAME" frontendUrlOverride="$FRONTEND_URL" apiBaseUrlOverride="$API_BASE_URL" \
+            --query properties.outputs \
+            -o json > deployment_outputs.json
+          cat deployment_outputs.json
+
+      - name: Export outputs as env
+        run: |
+          echo "WEBAPP_NAME=$(jq -r '.webAppName.value' deployment_outputs.json)" >> $GITHUB_ENV
+          echo "APIAPP_NAME=$(jq -r '.apiAppName.value' deployment_outputs.json)" >> $GITHUB_ENV
+          echo "ACR_LOGIN_SERVER=$(jq -r '.acrLoginServer.value' deployment_outputs.json)" >> $GITHUB_ENV
+          echo "API_URL=$(jq -r '.apiUrl.value' deployment_outputs.json)" >> $GITHUB_ENV
+          echo "WEB_URL=$(jq -r '.webUrl.value' deployment_outputs.json)" >> $GITHUB_ENV
+          # derive ACR name from login server
+          echo "ACR_NAME=$(echo $ACR_LOGIN_SERVER | sed 's/\\.azurecr\\.io$//')" >> $GITHUB_ENV
+
+      - name: Show tool versions
+        run: |
+          az version
+          docker version
+          jq --version
 
       - name: Login to ACR
-        run: az acr login --name $ACR_NAME
-
-      - name: Build and push backend
         run: |
-          docker build -f apps/backend/Dockerfile \
-            -t $ACR_NAME.azurecr.io/backend:${{ github.sha }} \
-            -t $ACR_NAME.azurecr.io/backend:latest .
-          docker push $ACR_NAME.azurecr.io/backend:${{ github.sha }}
-          docker push $ACR_NAME.azurecr.io/backend:latest
+          az acr login --name "$ACR_NAME"
 
-      - name: Build and push frontend
+      - name: Build and push backend image
         run: |
-          docker build -f apps/frontend/Dockerfile \
-            --build-arg NEXT_PUBLIC_API_URL=https://$BACKEND_WEBAPP.azurewebsites.net \
-            -t $ACR_NAME.azurecr.io/frontend:${{ github.sha }} \
-            -t $ACR_NAME.azurecr.io/frontend:latest .
-          docker push $ACR_NAME.azurecr.io/frontend:${{ github.sha }}
-          docker push $ACR_NAME.azurecr.io/frontend:latest
+          docker build -f apps/backend/Dockerfile -t "$ACR_LOGIN_SERVER/backend:latest" .
+          docker push "$ACR_LOGIN_SERVER/backend:latest"
 
-      - name: Deploy backend container
+      - name: Build and push frontend image
+        env:
+          NEXT_PUBLIC_API_URL: ${{ secrets.API_BASE_URL }}
         run: |
-          az webapp config container set \
-            --name $BACKEND_WEBAPP \
-            --resource-group ${{ secrets.AZURE_RESOURCE_GROUP }} \
-            --container-image-name $ACR_NAME.azurecr.io/backend:${{ github.sha }} \
-            --container-registry-url https://$ACR_NAME.azurecr.io
-
-      - name: Deploy frontend container
-        run: |
-          az webapp config container set \
-            --name $FRONTEND_WEBAPP \
-            --resource-group ${{ secrets.AZURE_RESOURCE_GROUP }} \
-            --container-image-name $ACR_NAME.azurecr.io/frontend:${{ github.sha }} \
-            --container-registry-url https://$ACR_NAME.azurecr.io
+          docker build --build-arg NEXT_PUBLIC_API_URL="$NEXT_PUBLIC_API_URL" -f apps/frontend/Dockerfile -t "$ACR_LOGIN_SERVER/frontend:latest" .
+          docker push "$ACR_LOGIN_SERVER/frontend:latest"
 
       - name: Restart web apps
+        env:
+          AZURE_RESOURCE_GROUP: ${{ github.event.inputs.resourceGroup }}
         run: |
-          az webapp restart --name $BACKEND_WEBAPP --resource-group ${{ secrets.AZURE_RESOURCE_GROUP }}
-          az webapp restart --name $FRONTEND_WEBAPP --resource-group ${{ secrets.AZURE_RESOURCE_GROUP }}
+          az webapp restart --resource-group "$AZURE_RESOURCE_GROUP" --name "$WEBAPP_NAME"
+          az webapp restart --resource-group "$AZURE_RESOURCE_GROUP" --name "$APIAPP_NAME"
 
-      - name: Wait for container startup
+      - name: Verify AcrPull role assignments
+        env:
+          AZURE_RESOURCE_GROUP: ${{ github.event.inputs.resourceGroup }}
+        continue-on-error: true
         run: |
-          echo "Waiting 120s for containers to start..."
-          sleep 120
-
-      - name: Verify backend health
-        run: |
-          echo "Checking backend health with retries..."
-          for i in 1 2 3 4 5; do
-            if curl -f -sS --max-time 30 https://$BACKEND_WEBAPP.azurewebsites.net/health; then
-              echo "Backend is healthy!"
-              exit 0
-            fi
-            echo "Attempt $i failed, waiting 30s..."
-            sleep 30
-          done
-          echo "Backend health check failed after 5 attempts"
-          exit 1
-
-      - name: Verify frontend health
-        run: |
-          echo "Checking frontend health with retries..."
-          for i in 1 2 3 4 5; do
-            if curl -f -sS --max-time 30 -o /dev/null https://$FRONTEND_WEBAPP.azurewebsites.net; then
-              echo "Frontend is healthy!"
-              exit 0
-            fi
-            echo "Attempt $i failed, waiting 30s..."
-            sleep 30
-          done
-          echo "Frontend health check failed after 5 attempts"
-          exit 1
+          ACR_ID=$(az acr show --name "$ACR_NAME" --query id -o tsv)
+          API_SP=$(az webapp identity show --resource-group "$AZURE_RESOURCE_GROUP" --name "$APIAPP_NAME" --query principalId -o tsv)
+          WEB_SP=$(az webapp identity show --resource-group "$AZURE_RESOURCE_GROUP" --name "$WEBAPP_NAME" --query principalId -o tsv)
+          echo "API principal: $API_SP"
+          echo "WEB principal: $WEB_SP"
+          echo "API AcrPull:"
+          az role assignment list --scope "$ACR_ID" --assignee "$API_SP" --query "[?roleDefinitionName=='AcrPull']"
+          echo "WEB AcrPull:"
+          az role assignment list --scope "$ACR_ID" --assignee "$WEB_SP" --query "[?roleDefinitionName=='AcrPull']"
