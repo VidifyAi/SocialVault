@@ -39,7 +39,10 @@ router.get(
   optionalAuth,
   async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
     try {
-      const result = await listingService.search(req.query as any);
+      const result = await listingService.search({
+        ...(req.query as any),
+        requestingUserId: req.user?.userId,
+      });
       res.json({
         success: true,
         data: result.listings,

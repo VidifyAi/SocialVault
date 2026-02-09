@@ -19,8 +19,6 @@ export interface User {
   trustScore: number;
   emailVerified: boolean;
   twoFactorEnabled: boolean;
-  stripeCustomerId?: string;
-  stripeConnectId?: string;
   lastLoginAt?: Date;
   createdAt: Date;
   updatedAt: Date;
@@ -35,7 +33,7 @@ export interface UserProfile extends Omit<User, 'passwordHash'> {
 }
 
 // Platform Types
-export type Platform = 'instagram' | 'youtube' | 'tiktok' | 'twitter' | 'facebook' | 'twitch' | 'snapchat' | 'linkedin';
+export type Platform = 'instagram' | 'youtube';
 
 export interface PlatformMetrics {
   followers: number;
@@ -145,8 +143,6 @@ export interface Transaction {
   platformFee: number;
   sellerPayout: number;
   currency: string;
-  stripePaymentIntentId?: string;
-  stripeTransferId?: string;
   transferProgress: TransferStep[];
   currentStep: number;
   disputeId?: string;

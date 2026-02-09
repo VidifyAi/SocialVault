@@ -5,18 +5,7 @@ const getProfileUrl = (platform: string, username: string) => {
   if (!platform || !username) return '';
   const patterns: Record<string, string> = {
     instagram: 'https://instagram.com/',
-    tiktok: 'https://tiktok.com/@',
-    twitter: 'https://twitter.com/',
     youtube: 'https://youtube.com/@',
-    facebook: 'https://facebook.com/',
-    linkedin: 'https://linkedin.com/in/',
-    discord: 'https://discord.com/users/',
-    telegram: 'https://t.me/',
-    reddit: 'https://reddit.com/user/',
-    snapchat: 'https://snapchat.com/add/',
-    pinterest: 'https://pinterest.com/',
-    onlyfans: 'https://onlyfans.com/',
-    other: '',
   };
   return patterns[platform] ? patterns[platform] + username.replace(/^@/, '') : '';
 };
@@ -53,11 +42,7 @@ import { PlatformIcon, getPlatformName } from '@/components/platform-icon';
 
 const platforms = [
   'instagram',
-  'tiktok',
   'youtube',
-  'twitter',
-  'facebook',
-  'other',
 ];
 
 const categories = [
@@ -95,7 +80,7 @@ const listingSchema = z.object({
       message: 'Do not include phone numbers or contact details',
     }),
   category: z.string().min(1, 'Please select a category'),
-  price: z.number().min(50, 'Minimum price is $50'),
+  price: z.number().min(500, 'Minimum price is ₹500'),
   followers: z.number().min(1000, 'Minimum followers is 1,000'),
   engagement: z.number().min(0.1).max(100, 'Engagement rate must be between 0.1% and 100%'),
   accountAge: z.string().min(1, 'Please enter account age'),
@@ -643,7 +628,7 @@ export default function NewListingPage() {
                     )}
                   </div>
                   <div className="space-y-2">
-                    <Label htmlFor="monthlyRevenue">Monthly Revenue (USD)</Label>
+                    <Label htmlFor="monthlyRevenue">Monthly Revenue (INR)</Label>
                     <Input
                       id="monthlyRevenue"
                       type="number"
@@ -654,7 +639,7 @@ export default function NewListingPage() {
                 </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="price">Price (USD) *</Label>
+                  <Label htmlFor="price">Price (INR) *</Label>
                   <Input
                     id="price"
                     type="number"

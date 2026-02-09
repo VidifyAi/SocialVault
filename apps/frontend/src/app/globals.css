@@ -62,9 +62,50 @@
   .text-balance {
     text-wrap: balance;
   }
-  
+
   .animate-in {
     animation: fade-in 0.2s ease-out;
+  }
+
+  .animate-float {
+    animation: float 3s ease-in-out infinite;
+    will-change: transform;
+  }
+
+  .animate-float-delayed {
+    animation: float 3s ease-in-out 1.5s infinite both;
+    will-change: transform;
+  }
+
+  .animate-glow {
+    animation: glow 4s ease-in-out infinite;
+    will-change: transform, opacity;
+  }
+
+  .animate-glow-delayed {
+    animation: glow 4s ease-in-out 2s infinite both;
+    will-change: transform, opacity;
+  }
+}
+
+/* Keyframes */
+@keyframes float {
+  0%, 100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-6px);
+  }
+}
+
+@keyframes glow {
+  0%, 100% {
+    opacity: 0.5;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.8;
+    transform: scale(1.1);
   }
 }
 
@@ -75,22 +116,6 @@
 
 .platform-youtube {
   @apply bg-[#FF0000] text-white;
-}
-
-.platform-tiktok {
-  @apply bg-black text-white;
-}
-
-.platform-twitter {
-  @apply bg-[#1DA1F2] text-white;
-}
-
-.platform-facebook {
-  @apply bg-[#1877F2] text-white;
-}
-
-.platform-twitch {
-  @apply bg-[#9146FF] text-white;
 }
 
 /* Custom scrollbar */

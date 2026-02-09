@@ -25,7 +25,7 @@ const scraperLimiter = rateLimit({
  * GET /scrape/:platform/:username
  * Fetch public metadata for a social media profile
  * 
- * @param platform - instagram | youtube | twitter | tiktok
+ * @param platform - instagram | youtube
  * @param username - Username/handle (with or without @)
  * @query refresh - Force refresh (bypass cache)
  */
@@ -39,7 +39,7 @@ router.get(
       const refresh = req.query.refresh === 'true';
 
       // Validate platform
-      const supportedPlatforms = ['instagram', 'youtube', 'twitter', 'tiktok'];
+      const supportedPlatforms = ['instagram', 'youtube'];
       if (!supportedPlatforms.includes(platform.toLowerCase())) {
         return res.status(400).json({
           success: false,

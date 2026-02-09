@@ -177,7 +177,7 @@ export default function PricingPage() {
                   </div>
                   <div className="flex justify-between items-center py-3">
                     <span>Minimum Platform Fee</span>
-                    <span className="font-semibold">₹100 / $10</span>
+                    <span className="font-semibold">₹100</span>
                   </div>
                 </div>
               </CardContent>

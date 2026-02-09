@@ -14,6 +14,7 @@ import {
   Clock,
   CheckCircle,
   AlertCircle,
+  Lock,
   Loader2,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -301,6 +302,12 @@ export default function ListingPage() {
                   <Badge variant="secondary">{listing.category}</Badge>
                 </div>
                 <h1 className="text-3xl font-bold">{listing.title}</h1>
+                {!isOwner && (
+                  <p className="mt-1 flex items-center gap-1.5 text-sm text-muted-foreground">
+                    <Lock className="h-3.5 w-3.5" />
+                    Account details are revealed after purchase
+                  </p>
+                )}
               </div>
               <div className="flex gap-2">
                 <Button variant="outline" size="icon">
@@ -432,7 +439,7 @@ export default function ListingPage() {
                         </DialogHeader>
                         <div className="space-y-4 py-4">
                           <div className="space-y-2">
-                            <Label>Offer Amount (USD)</Label>
+                            <Label>Offer Amount (INR)</Label>
                             <Input
                               type="number"
                               placeholder={`Listing price: ${formatCurrency(listing.price)}`}

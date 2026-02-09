@@ -291,7 +291,7 @@ export default function OffersPage() {
               <p className="font-bold">{formatCurrency(selectedOffer?.amount || 0)}</p>
             </div>
             <div className="space-y-2">
-              <Label>Your Counter Amount (USD)</Label>
+              <Label>Your Counter Amount (INR)</Label>
               <Input
                 type="number"
                 value={counterAmount}

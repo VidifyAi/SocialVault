@@ -221,7 +221,34 @@ interface ListingFilters {
   sortOrder?: 'asc' | 'desc';
   page?: number;
   limit?: number;
+  requestingUserId?: string;
 }
+
+const maskHandle = (text: string): string => {
+  if (!text) return '';
+  if (text.length < 6) return '*'.repeat(text.length);
+  return text.slice(0, 4) + '*'.repeat(5) + text.slice(-2);
+};
+
+const sanitizeListingForPublic = (
+  listing: Record<string, any>,
+  requestingUserId?: string
+) => {
+  // Skip masking for the listing owner
+  if (requestingUserId && listing.sellerId === requestingUserId) {
+    return listing;
+  }
+
+  const sanitized = { ...listing };
+  // Mask account identity fields
+  if (sanitized.username) sanitized.username = maskHandle(sanitized.username);
+  if (sanitized.displayName) sanitized.displayName = maskHandle(sanitized.displayName);
+  // Strip verification details
+  delete sanitized.verificationUrl;
+  delete sanitized.verificationCode;
+  delete sanitized.verificationMethod;
+  return sanitized;
+};
 
 const findDescriptionPolicyViolations = (text: string) => {
   const issues: string[] = [];
@@ -312,7 +339,7 @@ export class ListingService {
         isMonetized: data.isMonetized || (data.monthlyRevenue ? true : false),
         monthlyRevenue: data.monthlyRevenue,
         price: data.price,
-        currency: data.currency || 'USD',
+        currency: 'INR',
         negotiable: data.negotiable ?? true,
         includesEmail: data.includesEmail || false,
         includesOriginalEmail: data.includesOriginalEmail || false,
@@ -439,10 +466,10 @@ export class ListingService {
       isFavorited = !!favorite;
     }
 
-    return {
+    return sanitizeListingForPublic({
       ...listing,
       isFavorited,
-    };
+    }, userId);
   }
 
   async search(filters: ListingFilters) {
@@ -570,8 +597,12 @@ export class ListingService {
 
     const totalPages = Math.ceil(total / limit);
 
+    const sanitizedListings = listings.map((l) =>
+      sanitizeListingForPublic(l, filters.requestingUserId)
+    );
+
     return {
-      listings,
+      listings: sanitizedListings,
       meta: {
         page,
         limit,

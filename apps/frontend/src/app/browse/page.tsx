@@ -48,13 +48,7 @@ interface Listing {
 const platforms = [
   'all',
   'instagram',
-  'tiktok',
   'youtube',
-  'twitter',
-  'twitch',
-  'facebook',
-  'linkedin',
-  'discord',
 ];
 
 const categories = [

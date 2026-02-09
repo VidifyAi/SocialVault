@@ -54,7 +54,7 @@ router.post('/create-order', authenticate, async (req: AuthenticatedRequest, res
     // Create Razorpay order
     const order = await paymentService.createOrder({
       amount: transaction.amount,
-      currency: transaction.currency === 'USD' ? 'INR' : transaction.currency, // Razorpay primarily uses INR
+      currency: 'INR',
       transactionId: transaction.id,
       buyerId: req.user!.id,
       notes: {

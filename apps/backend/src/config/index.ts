@@ -33,8 +33,11 @@ export const config = {
   frontendUrl: process.env.FRONTEND_URL || 'http://localhost:3000',
   backendUrl: process.env.BACKEND_URL || 'http://localhost:3001',
   
+  // YouTube Data API v3
+  youtubeApiKey: process.env.YOUTUBE_API_KEY || '',
+
   // Platform Fees
   platformFeePercent: 5, // 5%
-  minPlatformFee: 10, // $10 or ₹100
-  maxPlatformFee: 500, // $500 or ₹5000
+  minPlatformFee: 100,   // ₹100
+  maxPlatformFee: 5000,  // ₹5000
 };

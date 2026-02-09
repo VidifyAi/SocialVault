@@ -5,11 +5,11 @@ export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
 }
 
-export function formatCurrency(amount: number, currency = 'USD'): string {
-  if (amount == null) return '$0';
-  return new Intl.NumberFormat('en-US', {
+export function formatCurrency(amount: number, currency = 'INR'): string {
+  if (amount == null) return '₹0';
+  return new Intl.NumberFormat('en-IN', {
     style: 'currency',
-    currency,
+    currency: 'INR',
     minimumFractionDigits: 0,
     maximumFractionDigits: 0,
   }).format(amount);
@@ -51,12 +51,6 @@ export function getPlatformColor(platform: string): string {
   const colors: Record<string, string> = {
     instagram: '#E4405F',
     youtube: '#FF0000',
-    tiktok: '#000000',
-    twitter: '#1DA1F2',
-    facebook: '#1877F2',
-    twitch: '#9146FF',
-    snapchat: '#FFFC00',
-    linkedin: '#0A66C2',
   };
   return colors[platform] || '#666666';
 }

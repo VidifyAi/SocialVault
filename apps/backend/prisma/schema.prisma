@@ -33,10 +33,6 @@ model User {
   status            String    @default("active")
   trustScore        Float     @default(5.0) @map("trust_score")
   
-  // Payment
-  stripeCustomerId  String?   @map("stripe_customer_id")
-  stripeConnectId   String?   @map("stripe_connect_id")
-  
   // Activity
   lastLoginAt       DateTime? @map("last_login_at")
   lastLoginIp       String?   @map("last_login_ip")
@@ -90,7 +86,7 @@ model Listing {
   
   // Pricing
   price               Float
-  currency            String    @default("USD")
+  currency            String    @default("INR")
   negotiable          Boolean   @default(true)
   
   // Account Details
@@ -185,7 +181,7 @@ model Offer {
   buyerId        String   @map("buyer_id") @db.ObjectId
   sellerId       String   @map("seller_id") @db.ObjectId
   amount         Float
-  currency       String   @default("USD")
+  currency       String   @default("INR")
   message        String?
   status         String   @default("pending")
   expiresAt      DateTime @map("expires_at")

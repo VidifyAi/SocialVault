@@ -1,4 +1,4 @@
-import { PrismaClient, UserRole, Platform, ListingStatus } from '@prisma/client';
+import { PrismaClient } from '@prisma/client';
 import bcrypt from 'bcryptjs';
 
 const prisma = new PrismaClient();
@@ -19,22 +19,19 @@ async function main() {
     await prisma.favorite.deleteMany();
     await prisma.listing.deleteMany();
     await prisma.notification.deleteMany();
-    await prisma.refreshToken.deleteMany();
     await prisma.auditLog.deleteMany();
     await prisma.user.deleteMany();
   }
 
   // Create admin user
-  const adminPassword = await bcrypt.hash('Admin123!', 12);
   const admin = await prisma.user.create({
     data: {
+      clerkId: 'clerk_admin_seed',
       email: 'admin@socialswapr.com',
       username: 'admin',
-      passwordHash: adminPassword,
       role: 'admin',
       firstName: 'Admin',
       lastName: 'User',
-      emailVerified: true,
       kycStatus: 'verified',
       trustScore: 10,
     },
@@ -42,17 +39,15 @@ async function main() {
   console.log('✅ Created admin user');
 
   // Create test seller
-  const sellerPassword = await bcrypt.hash('Seller123!', 12);
   const seller = await prisma.user.create({
     data: {
+      clerkId: 'clerk_seller_seed',
       email: 'seller@example.com',
       username: 'testseller',
-      passwordHash: sellerPassword,
       role: 'seller',
       firstName: 'Test',
       lastName: 'Seller',
       bio: 'Experienced social media account seller with 5+ years in the industry.',
-      emailVerified: true,
       kycStatus: 'verified',
       trustScore: 8.5,
     },
@@ -60,23 +55,21 @@ async function main() {
   console.log('✅ Created test seller');
 
   // Create test buyer
-  const buyerPassword = await bcrypt.hash('Buyer123!', 12);
   const buyer = await prisma.user.create({
     data: {
+      clerkId: 'clerk_buyer_seed',
       email: 'buyer@example.com',
       username: 'testbuyer',
-      passwordHash: buyerPassword,
       role: 'buyer',
       firstName: 'Test',
       lastName: 'Buyer',
-      emailVerified: true,
       kycStatus: 'verified',
       trustScore: 7.0,
     },
   });
   console.log('✅ Created test buyer');
 
-  // Create sample listings
+  // Create sample listings (Instagram + YouTube only, INR currency)
   const listings = await Promise.all([
     prisma.listing.create({
       data: {
@@ -88,14 +81,14 @@ async function main() {
         verificationStatus: 'verified',
         accountType: 'creator',
         niche: 'Fitness & Health',
-        description: `Premium fitness and health Instagram account with highly engaged audience. 
-        
+        description: `Premium fitness and health Instagram account with highly engaged audience.
+
 This account has been carefully grown over 3 years with authentic followers interested in fitness, nutrition, and wellness content.
 
 Key highlights:
 - Consistent 4%+ engagement rate
 - 65% female audience aged 25-34
-- Strong US and UK audience
+- Strong India and US audience
 - Perfect for fitness brands, supplements, or personal trainers
 - All content is original and can be included in sale
 
@@ -111,12 +104,12 @@ The account has never been penalized and has a clean history. Ready for immediat
         demographics: {
           ageGroups: { '18-24': 20, '25-34': 45, '35-44': 25, '45+': 10 },
           genderSplit: { female: 65, male: 35 },
-          topCountries: { US: 45, UK: 15, Canada: 10, Australia: 8, Other: 22 },
+          topCountries: { India: 40, US: 25, UK: 10, Canada: 8, Other: 17 },
         },
         isMonetized: true,
-        monthlyRevenue: 2500,
-        price: 15000,
-        currency: 'USD',
+        monthlyRevenue: 200000,
+        price: 1250000,
+        currency: 'INR',
         negotiable: true,
         includesEmail: true,
         includesOriginalEmail: false,
@@ -146,8 +139,8 @@ This channel focuses on consumer electronics, smartphones, and gadget reviews. T
 
 Highlights:
 - YouTube Partner Program enabled
-- Monthly AdSense revenue: $3,500-4,500
-- Strong affiliate relationships with Amazon and Best Buy
+- Monthly AdSense revenue: ₹3,00,000-₹3,75,000
+- Strong affiliate relationships
 - Over 500 videos in the library
 - Professional intro/outro and branding included
 
@@ -163,12 +156,12 @@ The channel has excellent standing with YouTube and has never received strikes.`
         demographics: {
           ageGroups: { '18-24': 30, '25-34': 40, '35-44': 20, '45+': 10 },
           genderSplit: { male: 78, female: 22 },
-          topCountries: { US: 55, UK: 12, India: 10, Canada: 8, Other: 15 },
+          topCountries: { India: 45, US: 20, UK: 10, Canada: 8, Other: 17 },
         },
         isMonetized: true,
-        monthlyRevenue: 4000,
-        price: 85000,
-        currency: 'USD',
+        monthlyRevenue: 350000,
+        price: 7000000,
+        currency: 'INR',
         negotiable: true,
         includesEmail: true,
         includesOriginalEmail: true,
@@ -180,109 +173,6 @@ The channel has excellent standing with YouTube and has never received strikes.`
         ],
         views: 3200,
         favoritesCount: 128,
-      },
-    }),
-    prisma.listing.create({
-      data: {
-        sellerId: seller.id,
-        platform: 'tiktok',
-        username: 'comedy_central_vibes',
-        displayName: 'Comedy Central Vibes',
-        status: 'active',
-        verificationStatus: 'verified',
-        accountType: 'creator',
-        niche: 'Entertainment & Comedy',
-        description: `Viral comedy TikTok account with massive reach and engagement. Multiple videos have hit 1M+ views.
-
-This account specializes in relatable comedy content and skits. The audience is highly engaged and the account regularly lands on the For You Page.
-
-What's included:
-- TikTok Creator Fund enrollment
-- Brand partnership history
-- All original content
-- Growth strategies and content calendar
-
-The account is in perfect standing with no violations.`,
-        metrics: {
-          followers: 892000,
-          following: 245,
-          posts: 423,
-          views: 89000000,
-          engagementRate: 8.5,
-          averageLikes: 45000,
-          averageComments: 890,
-          averageViews: 210000,
-        },
-        demographics: {
-          ageGroups: { '13-17': 15, '18-24': 50, '25-34': 25, '35+': 10 },
-          genderSplit: { female: 55, male: 45 },
-          topCountries: { US: 60, UK: 12, Australia: 8, Canada: 7, Other: 13 },
-        },
-        isMonetized: true,
-        monthlyRevenue: 3500,
-        price: 45000,
-        currency: 'USD',
-        negotiable: true,
-        includesEmail: true,
-        includesOriginalEmail: true,
-        accountAge: 24,
-        screenshots: [
-          'https://picsum.photos/seed/tt1/800/600',
-          'https://picsum.photos/seed/tt2/800/600',
-          'https://picsum.photos/seed/tt3/800/600',
-        ],
-        views: 2100,
-        favoritesCount: 89,
-      },
-    }),
-    prisma.listing.create({
-      data: {
-        sellerId: seller.id,
-        platform: 'twitter',
-        username: 'CryptoNewsDaily',
-        displayName: 'Crypto News Daily',
-        status: 'active',
-        verificationStatus: 'verified',
-        accountType: 'business',
-        niche: 'Cryptocurrency & Finance',
-        description: `Established cryptocurrency news and analysis Twitter account with strong following in the crypto community.
-
-This account is known for breaking news, market analysis, and educational content about blockchain and cryptocurrencies.
-
-Features:
-- Twitter Blue verified
-- Strong engagement from crypto community
-- History of successful sponsored posts
-- Connections with major crypto projects
-- Clean account history
-
-Perfect for crypto projects, exchanges, or financial influencers.`,
-        metrics: {
-          followers: 125000,
-          following: 1200,
-          posts: 28500,
-          engagementRate: 3.8,
-          averageLikes: 450,
-          averageComments: 85,
-        },
-        demographics: {
-          ageGroups: { '18-24': 25, '25-34': 45, '35-44': 20, '45+': 10 },
-          genderSplit: { male: 82, female: 18 },
-          topCountries: { US: 40, UK: 10, Singapore: 8, UAE: 7, Other: 35 },
-        },
-        isMonetized: false,
-        price: 22000,
-        currency: 'USD',
-        negotiable: true,
-        includesEmail: true,
-        includesOriginalEmail: false,
-        accountAge: 60,
-        screenshots: [
-          'https://picsum.photos/seed/tw1/800/600',
-          'https://picsum.photos/seed/tw2/800/600',
-        ],
-        views: 890,
-        favoritesCount: 34,
       },
     }),
     prisma.listing.create({
@@ -317,12 +207,12 @@ The account is perfect for travel agencies, hotels, or travel content creators.`
         demographics: {
           ageGroups: { '18-24': 20, '25-34': 45, '35-44': 25, '45+': 10 },
           genderSplit: { female: 58, male: 42 },
-          topCountries: { US: 35, UK: 15, Germany: 10, France: 8, Other: 32 },
+          topCountries: { India: 35, US: 20, UK: 12, Germany: 8, Other: 25 },
         },
         isMonetized: true,
-        monthlyRevenue: 1200,
-        price: 8500,
-        currency: 'USD',
+        monthlyRevenue: 100000,
+        price: 700000,
+        currency: 'INR',
         negotiable: true,
         includesEmail: true,
         includesOriginalEmail: true,
@@ -349,10 +239,10 @@ The account is perfect for travel agencies, hotels, or travel content creators.`
   console.log('✅ Added sample favorites');
 
   console.log('\n🎉 Database seeding completed!');
-  console.log('\nTest accounts:');
-  console.log('  Admin: admin@socialswapr.com / Admin123!');
-  console.log('  Seller: seller@example.com / Seller123!');
-  console.log('  Buyer: buyer@example.com / Buyer123!');
+  console.log('\nTest accounts (use Clerk auth):');
+  console.log('  Admin: admin@socialswapr.com');
+  console.log('  Seller: seller@example.com');
+  console.log('  Buyer: buyer@example.com');
 }
 
 main()

@@ -1,5 +1,7 @@
 import { cache } from '../lib/redis';
-import { rapidApiScraper, ScraperResult } from './platforms/rapidapi.scraper';
+import { ScraperResult } from './platforms/types';
+import { scrapeInstagram } from './platforms/instagram.scraper';
+import { scrapeYouTube } from './platforms/youtube.scraper';
 
 /**
  * Central Scraper Service
@@ -7,7 +9,7 @@ import { rapidApiScraper, ScraperResult } from './platforms/rapidapi.scraper';
  * Architecture: routes → controllers → services (this file) → platform scrapers
  */
 
-type Platform = 'instagram' | 'youtube' | 'twitter' | 'tiktok';
+type Platform = 'instagram' | 'youtube';
 
 interface ScraperResponse {
   success: boolean;
@@ -24,13 +26,9 @@ interface ScraperResponse {
 class ScraperService {
   private readonly CACHE_TTL = 48 * 60 * 60; // 48 hours
 
-  constructor() {
-    // No platform-specific scrapers needed; using unified RapidAPI service
-  }
-
   /**
    * Main entry point for scraping a social media profile
-   * Uses RapidAPI endpoints for all platforms
+   * Uses official YouTube API and Instagram HTML scraping
    * @param platform - Social media platform
    * @param username - Username/handle (without @)
    * @param useCache - Whether to use cached results (default: true)
@@ -64,10 +62,20 @@ class ScraperService {
       }
     }
 
-    // Perform scraping via RapidAPI
+    // Perform scraping
     try {
-      const data = await rapidApiScraper.scrape(platform, username);
-      
+      let data: ScraperResult;
+      switch (platform) {
+        case 'instagram':
+          data = await scrapeInstagram(username);
+          break;
+        case 'youtube':
+          data = await scrapeYouTube(username);
+          break;
+        default:
+          throw new Error('UNSUPPORTED_PLATFORM');
+      }
+
       // Add timestamp to cached data
       const cacheData = { ...data, cachedAt: timestamp };
 
@@ -89,7 +97,7 @@ class ScraperService {
       };
     } catch (error: any) {
       const errorCode = error.message || 'UNKNOWN_ERROR';
-      
+
       let userMessage = 'Failed to fetch profile data';
       if (errorCode === 'USER_NOT_FOUND') {
         userMessage = 'Profile does not exist or is private';
@@ -97,8 +105,6 @@ class ScraperService {
         userMessage = 'Request timed out';
       } else if (errorCode.startsWith('HTTP_')) {
         userMessage = `Platform returned status ${errorCode.replace('HTTP_', '')}`;
-      } else if (errorCode === 'YOUTUBE_ENDPOINT_PENDING' || errorCode === 'TIKTOK_ENDPOINT_PENDING' || errorCode === 'TWITTER_ENDPOINT_PENDING') {
-        userMessage = `${platform} integration is pending RapidAPI endpoint configuration`;
       }
 
       return {
@@ -147,13 +153,13 @@ class ScraperService {
   }> {
     // Parse platform and username from URL
     const { platform, username } = this.parseProfileUrl(profileUrl);
-    
+
     if (!platform || !username) {
       throw new Error('Invalid profile URL format');
     }
 
     const result = await this.scrapeProfile(platform, username);
-    
+
     if (!result.success || !result.data) {
       throw new Error(result.message || 'Failed to fetch profile');
     }
@@ -170,7 +176,7 @@ class ScraperService {
     try {
       const urlObj = new URL(url);
       const hostname = urlObj.hostname.replace(/^www\./, '');
-      
+
       let platform: Platform | null = null;
       let username: string | null = null;
 
@@ -180,14 +186,6 @@ class ScraperService {
         username = match ? match[1] : null;
       } else if (hostname.includes('youtube.com')) {
         platform = 'youtube';
-        const match = urlObj.pathname.match(/^\/@?([^\/]+)/);
-        username = match ? match[1] : null;
-      } else if (hostname.includes('twitter.com') || hostname.includes('x.com')) {
-        platform = 'twitter';
-        const match = urlObj.pathname.match(/^\/([^\/]+)/);
-        username = match ? match[1] : null;
-      } else if (hostname.includes('tiktok.com')) {
-        platform = 'tiktok';
         const match = urlObj.pathname.match(/^\/@?([^\/]+)/);
         username = match ? match[1] : null;
       }
@@ -200,3 +198,4 @@ class ScraperService {
 }
 
 export const scraperService = new ScraperService();
+export type { ScraperResult };

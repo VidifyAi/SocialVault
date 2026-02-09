@@ -29,8 +29,6 @@ router.get(
           kycVerifiedAt: true,
           status: true,
           trustScore: true,
-          stripeCustomerId: true,
-          stripeConnectId: true,
           createdAt: true,
           _count: {
             select: {
