@@ -40,7 +40,7 @@ jobs:
           az deployment group create \
             --resource-group "$AZURE_RESOURCE_GROUP" \
             --template-file infra/main.bicep \
-            --parameters baseName="$BASE_NAME" frontendUrlOverride="$FRONTEND_URL" apiBaseUrlOverride="$API_BASE_URL" \
+            --parameters baseName="$BASE_NAME" cosmosLocation="centralus" frontendUrlOverride="$FRONTEND_URL" apiBaseUrlOverride="$API_BASE_URL" \
             --query properties.outputs \
             -o json > deployment_outputs.json
           cat deployment_outputs.json
