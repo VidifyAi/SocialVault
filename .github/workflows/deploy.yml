@@ -61,6 +61,23 @@ jobs:
         run: |
           az acr login --name "$ACR_NAME"
 
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      - name: Lint
+        run: pnpm lint
+
+      - name: Type check
+        run: pnpm build
+
       - name: Build and push backend image
         run: |
           docker build -f apps/backend/Dockerfile -t "$ACR_LOGIN_SERVER/backend:latest" .

@@ -327,6 +327,30 @@ export class TransactionService {
       throw new BadRequestError('You cannot purchase your own listing');
     }
 
+    // Prevent duplicate active transactions for the same listing
+    const existingActive = await prisma.transaction.findFirst({
+      where: {
+        listingId,
+        status: { notIn: ['cancelled', 'refunded', 'payment_failed', 'completed'] },
+      },
+    });
+    if (existingActive) {
+      throw new BadRequestError('An active transaction already exists for this listing');
+    }
+
+    // Velocity check: max N transactions per day per buyer
+    const oneDayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
+    const recentTxCount = await prisma.transaction.count({
+      where: {
+        buyerId,
+        createdAt: { gte: oneDayAgo },
+        status: { notIn: ['cancelled', 'payment_failed'] },
+      },
+    });
+    if (recentTxCount >= config.maxTransactionsPerDay) {
+      throw new BadRequestError('Transaction limit reached. Please try again later.');
+    }
+
     // Calculate fees
     let amount = listing.price;
 

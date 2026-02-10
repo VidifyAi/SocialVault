@@ -158,17 +158,12 @@ export default function AdminFlaggedMessagesPage() {
   }
 
   return (
-    <div className="container mx-auto py-8 px-4">
-      <div className="flex items-center justify-between mb-8">
-        <div>
-          <h1 className="text-3xl font-bold">Flagged Messages</h1>
-          <p className="text-muted-foreground">
-            Monitor messages with potential contact info or payment mentions
-          </p>
-        </div>
-        <Button asChild variant="outline">
-          <Link href="/admin">← Back to Dashboard</Link>
-        </Button>
+    <div className="space-y-6">
+      <div>
+        <h1 className="text-3xl font-bold">Flagged Messages</h1>
+        <p className="text-muted-foreground">
+          Monitor messages with potential contact info or payment mentions
+        </p>
       </div>
 
       {/* Stats Cards */}

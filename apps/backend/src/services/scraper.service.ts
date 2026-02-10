@@ -24,7 +24,8 @@ interface ScraperResponse {
 }
 
 class ScraperService {
-  private readonly CACHE_TTL = 48 * 60 * 60; // 48 hours
+  private readonly INSTAGRAM_CACHE_TTL = 72 * 60 * 60; // 72 hours (commercial API costs money)
+  private readonly YOUTUBE_CACHE_TTL = 48 * 60 * 60; // 48 hours
 
   /**
    * Main entry point for scraping a social media profile
@@ -79,9 +80,10 @@ class ScraperService {
       // Add timestamp to cached data
       const cacheData = { ...data, cachedAt: timestamp };
 
-      // Store in cache
+      // Store in cache with platform-specific TTL
+      const ttl = platform === 'instagram' ? this.INSTAGRAM_CACHE_TTL : this.YOUTUBE_CACHE_TTL;
       try {
-        await cache.set(cacheKey, JSON.stringify(cacheData), this.CACHE_TTL);
+        await cache.set(cacheKey, JSON.stringify(cacheData), ttl);
       } catch (e) {
         // Cache write failed, but scraping succeeded
       }
@@ -182,11 +184,11 @@ class ScraperService {
 
       if (hostname.includes('instagram.com')) {
         platform = 'instagram';
-        const match = urlObj.pathname.match(/^\/([^\/]+)/);
+        const match = urlObj.pathname.match(/^\/([^/]+)/);
         username = match ? match[1] : null;
       } else if (hostname.includes('youtube.com')) {
         platform = 'youtube';
-        const match = urlObj.pathname.match(/^\/@?([^\/]+)/);
+        const match = urlObj.pathname.match(/^\/@?([^/]+)/);
         username = match ? match[1] : null;
       }
 

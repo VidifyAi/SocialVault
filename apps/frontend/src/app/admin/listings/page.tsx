@@ -1,10 +1,9 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Input } from '@/components/ui/input';
 import {
   Select,
   SelectContent,
@@ -28,10 +27,10 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
+import { Separator } from '@/components/ui/separator';
 import { Textarea } from '@/components/ui/textarea';
 import { api } from '@/lib/api';
-import { CheckCircle, XCircle, Eye, Search, ChevronLeft, ChevronRight } from 'lucide-react';
-import Link from 'next/link';
+import { CheckCircle, XCircle, Eye, Ban, ChevronLeft, ChevronRight } from 'lucide-react';
 import { PlatformIcon } from '@/components/platform-icon';
 
 interface Listing {
@@ -39,6 +38,7 @@ interface Listing {
   platform: string;
   username: string;
   displayName: string;
+  description: string;
   status: string;
   verificationStatus: string;
   price: number;
@@ -47,6 +47,7 @@ interface Listing {
   metrics: any;
   screenshots: string[];
   createdAt: string;
+  updatedAt: string;
   seller: {
     id: string;
     username: string;
@@ -72,11 +73,16 @@ export default function AdminListingsPage() {
     platform: 'all',
   });
   const [currentPage, setCurrentPage] = useState(1);
-  
+
   // Modal states
   const [selectedListing, setSelectedListing] = useState<Listing | null>(null);
   const [showRejectModal, setShowRejectModal] = useState(false);
+  const [showSuspendModal, setShowSuspendModal] = useState(false);
+  const [showDetailModal, setShowDetailModal] = useState(false);
+  const [listingDetail, setListingDetail] = useState<any>(null);
+  const [detailLoading, setDetailLoading] = useState(false);
   const [rejectReason, setRejectReason] = useState('');
+  const [suspendReason, setSuspendReason] = useState('');
   const [actionLoading, setActionLoading] = useState(false);
 
   const fetchListings = async () => {
@@ -104,6 +110,18 @@ export default function AdminListingsPage() {
     fetchListings();
   }, [currentPage, filters]);
 
+  const fetchListingDetail = async (listingId: string) => {
+    setDetailLoading(true);
+    try {
+      const response = await api.get(`/admin/listings/${listingId}`);
+      setListingDetail(response.data.data);
+    } catch (error) {
+      console.error('Failed to fetch listing details:', error);
+    } finally {
+      setDetailLoading(false);
+    }
+  };
+
   const handleVerify = async (listingId: string) => {
     setActionLoading(true);
     try {
@@ -118,7 +136,7 @@ export default function AdminListingsPage() {
 
   const handleReject = async () => {
     if (!selectedListing || !rejectReason.trim()) return;
-    
+
     setActionLoading(true);
     try {
       await api.post(`/admin/listings/${selectedListing.id}/reject`, {
@@ -130,6 +148,25 @@ export default function AdminListingsPage() {
       fetchListings();
     } catch (error) {
       console.error('Failed to reject listing:', error);
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const handleSuspend = async () => {
+    if (!selectedListing || !suspendReason.trim()) return;
+
+    setActionLoading(true);
+    try {
+      await api.post(`/admin/listings/${selectedListing.id}/suspend`, {
+        reason: suspendReason,
+      });
+      setShowSuspendModal(false);
+      setSuspendReason('');
+      setSelectedListing(null);
+      fetchListings();
+    } catch (error) {
+      console.error('Failed to suspend listing:', error);
     } finally {
       setActionLoading(false);
     }
@@ -149,13 +186,6 @@ export default function AdminListingsPage() {
         return `https://instagram.com/${username}`;
       case 'youtube':
         return `https://youtube.com/@${username}`;
-      case 'tiktok':
-        return `https://www.tiktok.com/@${username}`;
-      case 'twitter':
-      case 'twitter/x':
-        return `https://twitter.com/${username}`;
-      case 'facebook':
-        return `https://facebook.com/${username}`;
       default:
         return null;
     }
@@ -195,20 +225,25 @@ export default function AdminListingsPage() {
     }
   };
 
+  const formatMetric = (value: any) => {
+    if (value == null) return '-';
+    if (typeof value === 'number') {
+      if (value >= 1_000_000) return `${(value / 1_000_000).toFixed(1)}M`;
+      if (value >= 1_000) return `${(value / 1_000).toFixed(1)}K`;
+      return value.toString();
+    }
+    return String(value);
+  };
+
   return (
-    <div className="container mx-auto py-8 px-4">
-      <div className="flex items-center justify-between mb-8">
-        <div>
-          <h1 className="text-3xl font-bold">Manage Listings</h1>
-          <p className="text-muted-foreground">Review and moderate platform listings</p>
-        </div>
-        <Button asChild variant="outline">
-          <Link href="/admin">← Back to Dashboard</Link>
-        </Button>
+    <div className="space-y-6">
+      <div>
+        <h1 className="text-3xl font-bold">Manage Listings</h1>
+        <p className="text-muted-foreground">Review and moderate platform listings</p>
       </div>
 
       {/* Filters */}
-      <Card className="mb-6">
+      <Card>
         <CardHeader>
           <CardTitle className="text-lg">Filters</CardTitle>
         </CardHeader>
@@ -258,9 +293,6 @@ export default function AdminListingsPage() {
                 <SelectItem value="all">All Platforms</SelectItem>
                 <SelectItem value="instagram">Instagram</SelectItem>
                 <SelectItem value="youtube">YouTube</SelectItem>
-                <SelectItem value="tiktok">TikTok</SelectItem>
-                <SelectItem value="twitter">Twitter/X</SelectItem>
-                <SelectItem value="facebook">Facebook</SelectItem>
               </SelectContent>
             </Select>
 
@@ -307,16 +339,6 @@ export default function AdminListingsPage() {
                         <div>
                           <p className="font-medium">{listing.displayName || listing.username}</p>
                           <p className="text-sm text-muted-foreground">@{listing.username}</p>
-                          {getProfileUrl(listing.platform, listing.username) && (
-                            <a
-                              href={getProfileUrl(listing.platform, listing.username) || '#'}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="text-sm text-primary hover:underline"
-                            >
-                              {getProfileUrl(listing.platform, listing.username)}
-                            </a>
-                          )}
                         </div>
                       </div>
                     </TableCell>
@@ -337,11 +359,13 @@ export default function AdminListingsPage() {
                         <Button
                           variant="ghost"
                           size="sm"
-                          asChild
+                          onClick={() => {
+                            setSelectedListing(listing);
+                            setShowDetailModal(true);
+                            fetchListingDetail(listing.id);
+                          }}
                         >
-                          <Link href={`/listing/${listing.id}`} target="_blank">
-                            <Eye className="h-4 w-4" />
-                          </Link>
+                          <Eye className="h-4 w-4" />
                         </Button>
                         {(
                           listing.verificationStatus === 'pending' ||
@@ -371,6 +395,20 @@ export default function AdminListingsPage() {
                               <XCircle className="h-4 w-4" />
                             </Button>
                           </>
+                        )}
+                        {listing.status === 'active' && (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="text-orange-600 hover:text-orange-700"
+                            onClick={() => {
+                              setSelectedListing(listing);
+                              setShowSuspendModal(true);
+                            }}
+                            disabled={actionLoading}
+                          >
+                            <Ban className="h-4 w-4" />
+                          </Button>
                         )}
                       </div>
                     </TableCell>
@@ -412,6 +450,153 @@ export default function AdminListingsPage() {
         )}
       </Card>
 
+      {/* Listing Detail Modal */}
+      <Dialog open={showDetailModal} onOpenChange={setShowDetailModal}>
+        <DialogContent className="max-w-3xl max-h-[80vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Listing Details</DialogTitle>
+            <DialogDescription>
+              Detailed view for {selectedListing?.displayName || selectedListing?.username}
+            </DialogDescription>
+          </DialogHeader>
+
+          {detailLoading ? (
+            <div className="flex items-center justify-center py-12">
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+            </div>
+          ) : listingDetail ? (
+            <div className="space-y-4">
+              {/* Header */}
+              <div className="flex items-center gap-4">
+                <PlatformIcon platform={listingDetail.platform} className="h-12 w-12" />
+                <div>
+                  <h3 className="text-lg font-semibold">
+                    {listingDetail.displayName || listingDetail.username}
+                  </h3>
+                  <p className="text-muted-foreground">@{listingDetail.username}</p>
+                  {getProfileUrl(listingDetail.platform, listingDetail.username) && (
+                    <a
+                      href={getProfileUrl(listingDetail.platform, listingDetail.username)!}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-sm text-primary hover:underline"
+                    >
+                      View Profile
+                    </a>
+                  )}
+                </div>
+              </div>
+
+              <Separator />
+
+              {/* Details grid */}
+              <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+                <div>
+                  <p className="text-sm text-muted-foreground">Price</p>
+                  <p className="font-semibold text-lg">{formatCurrency(listingDetail.price)}</p>
+                </div>
+                <div>
+                  <p className="text-sm text-muted-foreground">Status</p>
+                  {getStatusBadge(listingDetail.status)}
+                </div>
+                <div>
+                  <p className="text-sm text-muted-foreground">Verification</p>
+                  {getVerificationBadge(listingDetail.verificationStatus)}
+                </div>
+                <div>
+                  <p className="text-sm text-muted-foreground">Platform</p>
+                  <p className="font-medium capitalize">{listingDetail.platform}</p>
+                </div>
+                <div>
+                  <p className="text-sm text-muted-foreground">Niche</p>
+                  <p className="font-medium">{listingDetail.niche || '-'}</p>
+                </div>
+                <div>
+                  <p className="text-sm text-muted-foreground">Created</p>
+                  <p className="font-medium">{new Date(listingDetail.createdAt).toLocaleDateString()}</p>
+                </div>
+              </div>
+
+              {/* Seller info */}
+              {listingDetail.seller && (
+                <>
+                  <Separator />
+                  <div>
+                    <p className="text-sm font-medium mb-2">Seller</p>
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <p className="text-sm text-muted-foreground">Username</p>
+                        <p className="font-medium">{listingDetail.seller.username}</p>
+                      </div>
+                      <div>
+                        <p className="text-sm text-muted-foreground">Email</p>
+                        <p className="font-medium">{listingDetail.seller.email}</p>
+                      </div>
+                      <div>
+                        <p className="text-sm text-muted-foreground">Trust Score</p>
+                        <p className="font-medium">{listingDetail.seller.trustScore?.toFixed(1)}</p>
+                      </div>
+                    </div>
+                  </div>
+                </>
+              )}
+
+              {/* Metrics */}
+              {listingDetail.metrics && Object.keys(listingDetail.metrics).length > 0 && (
+                <>
+                  <Separator />
+                  <div>
+                    <p className="text-sm font-medium mb-2">Metrics</p>
+                    <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+                      {Object.entries(listingDetail.metrics).map(([key, value]) => (
+                        <div key={key} className="p-2 bg-muted rounded-md">
+                          <p className="text-xs text-muted-foreground capitalize">{key.replace(/([A-Z])/g, ' $1').trim()}</p>
+                          <p className="font-medium">{formatMetric(value)}</p>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </>
+              )}
+
+              {/* Description */}
+              {listingDetail.description && (
+                <>
+                  <Separator />
+                  <div>
+                    <p className="text-sm font-medium mb-1">Description</p>
+                    <p className="text-sm text-muted-foreground whitespace-pre-wrap">
+                      {listingDetail.description}
+                    </p>
+                  </div>
+                </>
+              )}
+
+              {/* Screenshots */}
+              {listingDetail.screenshots && listingDetail.screenshots.length > 0 && (
+                <>
+                  <Separator />
+                  <div>
+                    <p className="text-sm font-medium mb-2">Screenshots ({listingDetail.screenshots.length})</p>
+                    <div className="grid grid-cols-2 gap-2">
+                      {listingDetail.screenshots.map((url: string, i: number) => (
+                        <a key={i} href={url} target="_blank" rel="noopener noreferrer">
+                          <img
+                            src={url}
+                            alt={`Screenshot ${i + 1}`}
+                            className="rounded-md border w-full h-40 object-cover"
+                          />
+                        </a>
+                      ))}
+                    </div>
+                  </div>
+                </>
+              )}
+            </div>
+          ) : null}
+        </DialogContent>
+      </Dialog>
+
       {/* Reject Modal */}
       <Dialog open={showRejectModal} onOpenChange={setShowRejectModal}>
         <DialogContent>
@@ -439,6 +624,39 @@ export default function AdminListingsPage() {
               disabled={!rejectReason.trim() || actionLoading}
             >
               {actionLoading ? 'Rejecting...' : 'Reject Listing'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Suspend Modal */}
+      <Dialog open={showSuspendModal} onOpenChange={setShowSuspendModal}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Suspend Listing</DialogTitle>
+            <DialogDescription>
+              Please provide a reason for suspending this listing. The seller will be notified.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="py-4">
+            <Textarea
+              placeholder="Enter suspension reason..."
+              value={suspendReason}
+              onChange={(e) => setSuspendReason(e.target.value)}
+              rows={4}
+            />
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowSuspendModal(false)}>
+              Cancel
+            </Button>
+            <Button
+              variant="default"
+              className="bg-orange-600 hover:bg-orange-700"
+              onClick={handleSuspend}
+              disabled={!suspendReason.trim() || actionLoading}
+            >
+              {actionLoading ? 'Suspending...' : 'Suspend Listing'}
             </Button>
           </DialogFooter>
         </DialogContent>

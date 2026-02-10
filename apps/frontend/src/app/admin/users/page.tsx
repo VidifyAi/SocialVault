@@ -1,7 +1,7 @@
 'use client';
 
-import { useEffect, useState } from 'react';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { useEffect, useState, useRef } from 'react';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import {
@@ -27,20 +27,22 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Separator } from '@/components/ui/separator';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { api } from '@/lib/api';
-import { 
-  Users, 
-  Eye, 
-  ChevronLeft, 
+import {
+  Users,
+  Eye,
+  ChevronLeft,
   ChevronRight,
   Shield,
   Ban,
   CheckCircle,
-  Star
+  Star,
+  Search,
 } from 'lucide-react';
-import Link from 'next/link';
 
 interface User {
   id: string;
@@ -79,15 +81,33 @@ export default function AdminUsersPage() {
     kycStatus: 'all',
   });
   const [currentPage, setCurrentPage] = useState(1);
-  
+  const [searchQuery, setSearchQuery] = useState('');
+  const [debouncedSearch, setDebouncedSearch] = useState('');
+  const searchTimerRef = useRef<NodeJS.Timeout | null>(null);
+
   // Modal states
   const [selectedUser, setSelectedUser] = useState<User | null>(null);
   const [showStatusModal, setShowStatusModal] = useState(false);
   const [showRoleModal, setShowRoleModal] = useState(false);
+  const [showDetailModal, setShowDetailModal] = useState(false);
+  const [userDetail, setUserDetail] = useState<any>(null);
+  const [detailLoading, setDetailLoading] = useState(false);
   const [newStatus, setNewStatus] = useState('');
   const [newRole, setNewRole] = useState('');
   const [statusReason, setStatusReason] = useState('');
   const [actionLoading, setActionLoading] = useState(false);
+
+  // Debounce search
+  useEffect(() => {
+    if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
+    searchTimerRef.current = setTimeout(() => {
+      setDebouncedSearch(searchQuery);
+      setCurrentPage(1);
+    }, 300);
+    return () => {
+      if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
+    };
+  }, [searchQuery]);
 
   const fetchUsers = async () => {
     setLoading(true);
@@ -99,6 +119,7 @@ export default function AdminUsersPage() {
       if (filters.status !== 'all') params.append('status', filters.status);
       if (filters.role !== 'all') params.append('role', filters.role);
       if (filters.kycStatus !== 'all') params.append('kycStatus', filters.kycStatus);
+      if (debouncedSearch) params.append('search', debouncedSearch);
 
       const response = await api.get(`/admin/users?${params}`);
       setUsers(response.data.data.users);
@@ -112,11 +133,23 @@ export default function AdminUsersPage() {
 
   useEffect(() => {
     fetchUsers();
-  }, [currentPage, filters]);
+  }, [currentPage, filters, debouncedSearch]);
+
+  const fetchUserDetail = async (userId: string) => {
+    setDetailLoading(true);
+    try {
+      const response = await api.get(`/admin/users/${userId}`);
+      setUserDetail(response.data.data);
+    } catch (error) {
+      console.error('Failed to fetch user details:', error);
+    } finally {
+      setDetailLoading(false);
+    }
+  };
 
   const handleUpdateStatus = async () => {
     if (!selectedUser || !newStatus) return;
-    
+
     setActionLoading(true);
     try {
       await api.patch(`/admin/users/${selectedUser.id}/status`, {
@@ -137,7 +170,7 @@ export default function AdminUsersPage() {
 
   const handleUpdateRole = async () => {
     if (!selectedUser || !newRole) return;
-    
+
     setActionLoading(true);
     try {
       await api.patch(`/admin/users/${selectedUser.id}/role`, {
@@ -195,25 +228,38 @@ export default function AdminUsersPage() {
     }
   };
 
+  const formatCurrency = (amount: number) => {
+    return new Intl.NumberFormat('en-IN', {
+      style: 'currency',
+      currency: 'INR',
+      maximumFractionDigits: 0,
+    }).format(amount);
+  };
+
   return (
-    <div className="container mx-auto py-8 px-4">
-      <div className="flex items-center justify-between mb-8">
-        <div>
-          <h1 className="text-3xl font-bold">User Management</h1>
-          <p className="text-muted-foreground">Manage platform users and permissions</p>
-        </div>
-        <Button asChild variant="outline">
-          <Link href="/admin">← Back to Dashboard</Link>
-        </Button>
+    <div className="space-y-6">
+      <div>
+        <h1 className="text-3xl font-bold">User Management</h1>
+        <p className="text-muted-foreground">Manage platform users and permissions</p>
       </div>
 
       {/* Filters */}
-      <Card className="mb-6">
+      <Card>
         <CardHeader>
           <CardTitle className="text-lg">Filters</CardTitle>
         </CardHeader>
         <CardContent>
           <div className="flex flex-wrap gap-4">
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <Input
+                placeholder="Search by username or email..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="pl-9 w-[250px]"
+              />
+            </div>
+
             <Select
               value={filters.status}
               onValueChange={(value) => setFilters({ ...filters, status: value })}
@@ -262,7 +308,10 @@ export default function AdminUsersPage() {
 
             <Button
               variant="ghost"
-              onClick={() => setFilters({ status: 'all', role: 'all', kycStatus: 'all' })}
+              onClick={() => {
+                setFilters({ status: 'all', role: 'all', kycStatus: 'all' });
+                setSearchQuery('');
+              }}
             >
               Clear Filters
             </Button>
@@ -330,11 +379,13 @@ export default function AdminUsersPage() {
                         <Button
                           variant="ghost"
                           size="sm"
-                          asChild
+                          onClick={() => {
+                            setSelectedUser(user);
+                            setShowDetailModal(true);
+                            fetchUserDetail(user.id);
+                          }}
                         >
-                          <Link href={`/user/${user.id}`} target="_blank">
-                            <Eye className="h-4 w-4" />
-                          </Link>
+                          <Eye className="h-4 w-4" />
                         </Button>
                         <Button
                           variant="ghost"
@@ -397,6 +448,195 @@ export default function AdminUsersPage() {
           </div>
         )}
       </Card>
+
+      {/* User Detail Modal */}
+      <Dialog open={showDetailModal} onOpenChange={setShowDetailModal}>
+        <DialogContent className="max-w-3xl max-h-[80vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>User Details</DialogTitle>
+            <DialogDescription>
+              Detailed view for {selectedUser?.username}
+            </DialogDescription>
+          </DialogHeader>
+
+          {detailLoading ? (
+            <div className="flex items-center justify-center py-12">
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+            </div>
+          ) : userDetail ? (
+            <div className="space-y-4">
+              {/* Profile Summary */}
+              <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+                <div>
+                  <p className="text-sm text-muted-foreground">Username</p>
+                  <p className="font-medium">{userDetail.username}</p>
+                </div>
+                <div>
+                  <p className="text-sm text-muted-foreground">Email</p>
+                  <p className="font-medium">{userDetail.email}</p>
+                </div>
+                <div>
+                  <p className="text-sm text-muted-foreground">Role</p>
+                  {getRoleBadge(userDetail.role)}
+                </div>
+                <div>
+                  <p className="text-sm text-muted-foreground">Status</p>
+                  {getStatusBadge(userDetail.status)}
+                </div>
+                <div>
+                  <p className="text-sm text-muted-foreground">Trust Score</p>
+                  <div className="flex items-center gap-1">
+                    <Star className="h-4 w-4 text-yellow-500" />
+                    <span className="font-medium">{userDetail.trustScore?.toFixed(1)}</span>
+                  </div>
+                </div>
+                <div>
+                  <p className="text-sm text-muted-foreground">KYC Status</p>
+                  {getKycBadge(userDetail.kycStatus)}
+                </div>
+                <div>
+                  <p className="text-sm text-muted-foreground">Joined</p>
+                  <p className="font-medium">{new Date(userDetail.createdAt).toLocaleDateString()}</p>
+                </div>
+                <div>
+                  <p className="text-sm text-muted-foreground">Last Login</p>
+                  <p className="font-medium">
+                    {userDetail.lastLoginAt
+                      ? new Date(userDetail.lastLoginAt).toLocaleDateString()
+                      : 'Never'}
+                  </p>
+                </div>
+              </div>
+
+              <Separator />
+
+              <Tabs defaultValue="listings">
+                <TabsList>
+                  <TabsTrigger value="listings">
+                    Listings ({userDetail.listings?.length || 0})
+                  </TabsTrigger>
+                  <TabsTrigger value="purchases">
+                    Purchases ({userDetail.purchasedTransactions?.length || 0})
+                  </TabsTrigger>
+                  <TabsTrigger value="sales">
+                    Sales ({userDetail.soldTransactions?.length || 0})
+                  </TabsTrigger>
+                  <TabsTrigger value="reviews">
+                    Reviews ({userDetail.reviewsReceived?.length || 0})
+                  </TabsTrigger>
+                </TabsList>
+
+                <TabsContent value="listings" className="mt-4">
+                  {userDetail.listings?.length === 0 ? (
+                    <p className="text-muted-foreground text-center py-4">No listings</p>
+                  ) : (
+                    <div className="space-y-2">
+                      {userDetail.listings?.map((listing: any) => (
+                        <div key={listing.id} className="flex items-center justify-between p-3 border rounded-lg">
+                          <div>
+                            <p className="font-medium">{listing.displayName || listing.username}</p>
+                            <p className="text-sm text-muted-foreground">
+                              {listing.platform} &middot; {formatCurrency(listing.price)}
+                            </p>
+                          </div>
+                          <Badge variant={listing.status === 'active' ? 'default' : 'secondary'}>
+                            {listing.status}
+                          </Badge>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </TabsContent>
+
+                <TabsContent value="purchases" className="mt-4">
+                  {userDetail.purchasedTransactions?.length === 0 ? (
+                    <p className="text-muted-foreground text-center py-4">No purchases</p>
+                  ) : (
+                    <div className="space-y-2">
+                      {userDetail.purchasedTransactions?.map((tx: any) => (
+                        <div key={tx.id} className="flex items-center justify-between p-3 border rounded-lg">
+                          <div>
+                            <p className="font-medium">
+                              {tx.listing?.displayName || tx.listing?.username || 'Unknown'}
+                            </p>
+                            <p className="text-sm text-muted-foreground">
+                              {new Date(tx.createdAt).toLocaleDateString()}
+                            </p>
+                          </div>
+                          <div className="text-right">
+                            <p className="font-medium">{formatCurrency(tx.amount)}</p>
+                            <Badge variant={tx.status === 'completed' ? 'default' : 'secondary'}>
+                              {tx.status.replace(/_/g, ' ')}
+                            </Badge>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </TabsContent>
+
+                <TabsContent value="sales" className="mt-4">
+                  {userDetail.soldTransactions?.length === 0 ? (
+                    <p className="text-muted-foreground text-center py-4">No sales</p>
+                  ) : (
+                    <div className="space-y-2">
+                      {userDetail.soldTransactions?.map((tx: any) => (
+                        <div key={tx.id} className="flex items-center justify-between p-3 border rounded-lg">
+                          <div>
+                            <p className="font-medium">
+                              {tx.listing?.displayName || tx.listing?.username || 'Unknown'}
+                            </p>
+                            <p className="text-sm text-muted-foreground">
+                              {new Date(tx.createdAt).toLocaleDateString()}
+                            </p>
+                          </div>
+                          <div className="text-right">
+                            <p className="font-medium">{formatCurrency(tx.amount)}</p>
+                            <Badge variant={tx.status === 'completed' ? 'default' : 'secondary'}>
+                              {tx.status.replace(/_/g, ' ')}
+                            </Badge>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </TabsContent>
+
+                <TabsContent value="reviews" className="mt-4">
+                  {userDetail.reviewsReceived?.length === 0 ? (
+                    <p className="text-muted-foreground text-center py-4">No reviews</p>
+                  ) : (
+                    <div className="space-y-2">
+                      {userDetail.reviewsReceived?.map((review: any) => (
+                        <div key={review.id} className="p-3 border rounded-lg">
+                          <div className="flex items-center gap-2 mb-1">
+                            <div className="flex">
+                              {Array.from({ length: 5 }).map((_, i) => (
+                                <Star
+                                  key={i}
+                                  className={`h-3 w-3 ${
+                                    i < review.rating ? 'text-yellow-500 fill-yellow-500' : 'text-muted-foreground'
+                                  }`}
+                                />
+                              ))}
+                            </div>
+                            <span className="text-xs text-muted-foreground">
+                              {new Date(review.createdAt).toLocaleDateString()}
+                            </span>
+                          </div>
+                          {review.comment && (
+                            <p className="text-sm">{review.comment}</p>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </TabsContent>
+              </Tabs>
+            </div>
+          ) : null}
+        </DialogContent>
+      </Dialog>
 
       {/* Status Modal */}
       <Dialog open={showStatusModal} onOpenChange={setShowStatusModal}>

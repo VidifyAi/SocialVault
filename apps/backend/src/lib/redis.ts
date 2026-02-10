@@ -1,56 +1,51 @@
-// Simple in-memory cache implementation
-// This can be replaced with Redis in production if needed
+import Redis from 'ioredis';
+import { config } from '../config';
+import { logger } from '../utils/logger';
 
-class InMemoryCache {
-  private store: Map<string, { value: string; expiry: number | null }> = new Map();
+export const redis = new Redis(config.redisUrl, {
+  maxRetriesPerRequest: null, // Required by BullMQ
+  lazyConnect: true,
+});
 
+redis.on('error', (err) => {
+  logger.error('Redis connection error:', err);
+});
+
+redis.on('connect', () => {
+  logger.info('Connected to Redis');
+});
+
+class RedisCache {
   async get(key: string): Promise<string | null> {
-    const item = this.store.get(key);
-    if (!item) return null;
-    
-    if (item.expiry && Date.now() > item.expiry) {
-      this.store.delete(key);
-      return null;
-    }
-    
-    return item.value;
+    return redis.get(key);
   }
 
   async set(key: string, value: string, ttlSeconds?: number): Promise<void> {
-    const expiry = ttlSeconds ? Date.now() + ttlSeconds * 1000 : null;
-    this.store.set(key, { value, expiry });
+    if (ttlSeconds) {
+      await redis.set(key, value, 'EX', ttlSeconds);
+    } else {
+      await redis.set(key, value);
+    }
   }
 
   async del(key: string): Promise<void> {
-    this.store.delete(key);
+    await redis.del(key);
   }
 
   async delPattern(pattern: string): Promise<void> {
-    // Convert glob pattern to regex
-    const regexPattern = pattern
-      .replace(/\*/g, '.*')
-      .replace(/\?/g, '.');
-    const regex = new RegExp(`^${regexPattern}$`);
-    
-    for (const key of this.store.keys()) {
-      if (regex.test(key)) {
-        this.store.delete(key);
-      }
+    const keys = await redis.keys(pattern);
+    if (keys.length > 0) {
+      await redis.del(...keys);
     }
   }
 
   async keys(pattern: string): Promise<string[]> {
-    const regexPattern = pattern
-      .replace(/\*/g, '.*')
-      .replace(/\?/g, '.');
-    const regex = new RegExp(`^${regexPattern}$`);
-    
-    return Array.from(this.store.keys()).filter(key => regex.test(key));
+    return redis.keys(pattern);
   }
 
   async flushAll(): Promise<void> {
-    this.store.clear();
+    await redis.flushall();
   }
 }
 
-export const cache = new InMemoryCache();
+export const cache = new RedisCache();

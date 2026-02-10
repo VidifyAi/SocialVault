@@ -213,23 +213,34 @@ export class OfferService {
     }
 
     if (action === 'accept') {
-      // Accept the offer
-      const updatedOffer = await prisma.offer.update({
-        where: { id },
-        data: { status: 'accepted' },
+      // Use interactive transaction to prevent concurrent double-accept
+      const updatedOffer = await prisma.$transaction(async (tx) => {
+        // Re-read offer inside transaction to get latest state
+        const freshOffer = await tx.offer.findUnique({ where: { id } });
+        if (!freshOffer || freshOffer.status !== 'pending') {
+          throw new BadRequestError('This offer is no longer pending');
+        }
+
+        // Accept this offer
+        const accepted = await tx.offer.update({
+          where: { id },
+          data: { status: 'accepted' },
+        });
+
+        // Reject all other pending offers for this listing
+        await tx.offer.updateMany({
+          where: {
+            listingId: offer.listingId,
+            id: { not: id },
+            status: 'pending',
+          },
+          data: { status: 'rejected' },
+        });
+
+        return accepted;
       });
 
-      // Reject all other pending offers for this listing
-      await prisma.offer.updateMany({
-        where: {
-          listingId: offer.listingId,
-          id: { not: id },
-          status: 'pending',
-        },
-        data: { status: 'rejected' },
-      });
-
-      // Create notification for buyer
+      // Create notification for buyer (after transaction commits)
       await createNotifications([
         {
           userId: offer.buyerId,

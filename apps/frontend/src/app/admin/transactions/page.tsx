@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import {
@@ -27,18 +27,19 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Separator } from '@/components/ui/separator';
 import { Textarea } from '@/components/ui/textarea';
 import { api } from '@/lib/api';
-import { 
-  CreditCard, 
-  Eye, 
-  ChevronLeft, 
+import {
+  CreditCard,
+  Eye,
+  ChevronLeft,
   ChevronRight,
   RefreshCcw,
-  CheckCircle,
-  ArrowUpRight
+  ArrowUpRight,
+  Star,
 } from 'lucide-react';
-import Link from 'next/link';
 import { PlatformIcon } from '@/components/platform-icon';
 
 interface Transaction {
@@ -66,6 +67,30 @@ interface PaginationData {
   totalPages: number;
 }
 
+const TIMELINE_STEPS = [
+  'Initiated',
+  'Payment',
+  'Escrow',
+  'Transfer',
+  'Confirmed',
+  'Completed',
+];
+
+function getStepIndex(status: string): number {
+  switch (status) {
+    case 'initiated': return 0;
+    case 'payment_pending': return 1;
+    case 'escrow_funded': return 2;
+    case 'transfer_in_progress': return 3;
+    case 'transfer_confirmed': return 4;
+    case 'completed': return 5;
+    case 'cancelled':
+    case 'disputed':
+      return -1;
+    default: return 0;
+  }
+}
+
 export default function AdminTransactionsPage() {
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [pagination, setPagination] = useState<PaginationData | null>(null);
@@ -75,10 +100,13 @@ export default function AdminTransactionsPage() {
     escrowStatus: 'all',
   });
   const [currentPage, setCurrentPage] = useState(1);
-  
+
   // Modal states
   const [selectedTransaction, setSelectedTransaction] = useState<Transaction | null>(null);
   const [showRefundModal, setShowRefundModal] = useState(false);
+  const [showDetailModal, setShowDetailModal] = useState(false);
+  const [txDetail, setTxDetail] = useState<any>(null);
+  const [detailLoading, setDetailLoading] = useState(false);
   const [refundReason, setRefundReason] = useState('');
   const [actionLoading, setActionLoading] = useState(false);
 
@@ -106,6 +134,18 @@ export default function AdminTransactionsPage() {
     fetchTransactions();
   }, [currentPage, filters]);
 
+  const fetchTxDetail = async (txId: string) => {
+    setDetailLoading(true);
+    try {
+      const response = await api.get(`/admin/transactions/${txId}`);
+      setTxDetail(response.data.data);
+    } catch (error) {
+      console.error('Failed to fetch transaction details:', error);
+    } finally {
+      setDetailLoading(false);
+    }
+  };
+
   const handleReleaseEscrow = async (transactionId: string) => {
     setActionLoading(true);
     try {
@@ -120,7 +160,7 @@ export default function AdminTransactionsPage() {
 
   const handleRefund = async () => {
     if (!selectedTransaction || !refundReason.trim()) return;
-    
+
     setActionLoading(true);
     try {
       await api.post(`/admin/transactions/${selectedTransaction.id}/refund`, {
@@ -180,19 +220,14 @@ export default function AdminTransactionsPage() {
   };
 
   return (
-    <div className="container mx-auto py-8 px-4">
-      <div className="flex items-center justify-between mb-8">
-        <div>
-          <h1 className="text-3xl font-bold">Transactions</h1>
-          <p className="text-muted-foreground">Manage platform transactions and escrow</p>
-        </div>
-        <Button asChild variant="outline">
-          <Link href="/admin">← Back to Dashboard</Link>
-        </Button>
+    <div className="space-y-6">
+      <div>
+        <h1 className="text-3xl font-bold">Transactions</h1>
+        <p className="text-muted-foreground">Manage platform transactions and escrow</p>
       </div>
 
       {/* Filters */}
-      <Card className="mb-6">
+      <Card>
         <CardHeader>
           <CardTitle className="text-lg">Filters</CardTitle>
         </CardHeader>
@@ -320,13 +355,15 @@ export default function AdminTransactionsPage() {
                         <Button
                           variant="ghost"
                           size="sm"
-                          asChild
+                          onClick={() => {
+                            setSelectedTransaction(tx);
+                            setShowDetailModal(true);
+                            fetchTxDetail(tx.id);
+                          }}
                         >
-                          <Link href={`/dashboard/transactions/${tx.id}`} target="_blank">
-                            <Eye className="h-4 w-4" />
-                          </Link>
+                          <Eye className="h-4 w-4" />
                         </Button>
-                        
+
                         {tx.escrowStatus === 'funded' && tx.status !== 'completed' && (
                           <>
                             <Button
@@ -394,6 +431,187 @@ export default function AdminTransactionsPage() {
         )}
       </Card>
 
+      {/* Transaction Detail Modal */}
+      <Dialog open={showDetailModal} onOpenChange={setShowDetailModal}>
+        <DialogContent className="max-w-3xl max-h-[80vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Transaction Details</DialogTitle>
+            <DialogDescription>
+              Transaction #{selectedTransaction?.id.slice(0, 8)}...
+            </DialogDescription>
+          </DialogHeader>
+
+          {detailLoading ? (
+            <div className="flex items-center justify-center py-12">
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+            </div>
+          ) : txDetail ? (
+            <div className="space-y-4">
+              {/* Summary */}
+              <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+                <div>
+                  <p className="text-sm text-muted-foreground">Amount</p>
+                  <p className="font-semibold text-lg">{formatCurrency(txDetail.amount)}</p>
+                </div>
+                <div>
+                  <p className="text-sm text-muted-foreground">Platform Fee</p>
+                  <p className="font-medium">{formatCurrency(txDetail.platformFee)}</p>
+                </div>
+                <div>
+                  <p className="text-sm text-muted-foreground">Seller Payout</p>
+                  <p className="font-medium">{formatCurrency(txDetail.sellerPayout)}</p>
+                </div>
+                <div>
+                  <p className="text-sm text-muted-foreground">Status</p>
+                  {getStatusBadge(txDetail.status)}
+                </div>
+                <div>
+                  <p className="text-sm text-muted-foreground">Escrow</p>
+                  {getEscrowBadge(txDetail.escrowStatus)}
+                </div>
+                <div>
+                  <p className="text-sm text-muted-foreground">Date</p>
+                  <p className="font-medium">{new Date(txDetail.createdAt).toLocaleDateString()}</p>
+                </div>
+              </div>
+
+              {/* Buyer / Seller */}
+              <div className="grid grid-cols-2 gap-4">
+                <div className="p-3 border rounded-lg">
+                  <p className="text-xs text-muted-foreground mb-1">Buyer</p>
+                  <p className="font-medium">{txDetail.buyer?.username}</p>
+                  <p className="text-sm text-muted-foreground">{txDetail.buyer?.email}</p>
+                </div>
+                <div className="p-3 border rounded-lg">
+                  <p className="text-xs text-muted-foreground mb-1">Seller</p>
+                  <p className="font-medium">{txDetail.seller?.username}</p>
+                  <p className="text-sm text-muted-foreground">{txDetail.seller?.email}</p>
+                </div>
+              </div>
+
+              <Separator />
+
+              {/* Timeline */}
+              <div>
+                <p className="text-sm font-medium mb-3">Transaction Timeline</p>
+                <div className="flex items-center justify-between">
+                  {TIMELINE_STEPS.map((step, i) => {
+                    const currentIdx = getStepIndex(txDetail.status);
+                    const isComplete = currentIdx >= 0 && i <= currentIdx;
+                    const isCurrent = currentIdx >= 0 && i === currentIdx;
+                    return (
+                      <div key={step} className="flex flex-col items-center flex-1">
+                        <div className="flex items-center w-full">
+                          {i > 0 && (
+                            <div className={`h-0.5 flex-1 ${isComplete ? 'bg-primary' : 'bg-muted'}`} />
+                          )}
+                          <div
+                            className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-medium border-2 ${
+                              isComplete
+                                ? 'bg-primary border-primary text-primary-foreground'
+                                : 'border-muted bg-background text-muted-foreground'
+                            } ${isCurrent ? 'ring-2 ring-primary/30' : ''}`}
+                          >
+                            {i + 1}
+                          </div>
+                          {i < TIMELINE_STEPS.length - 1 && (
+                            <div className={`h-0.5 flex-1 ${isComplete && i < currentIdx ? 'bg-primary' : 'bg-muted'}`} />
+                          )}
+                        </div>
+                        <span className="text-[10px] text-muted-foreground mt-1 text-center">{step}</span>
+                      </div>
+                    );
+                  })}
+                </div>
+                {getStepIndex(txDetail.status) === -1 && (
+                  <p className="text-sm text-red-500 mt-2 text-center">
+                    Transaction {txDetail.status === 'cancelled' ? 'cancelled' : 'disputed'}
+                  </p>
+                )}
+              </div>
+
+              <Separator />
+
+              <Tabs defaultValue="messages">
+                <TabsList>
+                  <TabsTrigger value="messages">
+                    Messages ({txDetail.conversation?.messages?.length || 0})
+                  </TabsTrigger>
+                  <TabsTrigger value="reviews">
+                    Reviews ({txDetail.reviews?.length || 0})
+                  </TabsTrigger>
+                </TabsList>
+
+                <TabsContent value="messages" className="mt-4">
+                  {!txDetail.conversation?.messages?.length ? (
+                    <p className="text-muted-foreground text-center py-4">No messages</p>
+                  ) : (
+                    <div className="space-y-3 max-h-60 overflow-y-auto">
+                      {txDetail.conversation.messages.map((msg: any) => {
+                        const isBuyer = msg.senderId === txDetail.buyerId;
+                        return (
+                          <div
+                            key={msg.id}
+                            className={`flex ${isBuyer ? 'justify-start' : 'justify-end'}`}
+                          >
+                            <div
+                              className={`max-w-[70%] p-3 rounded-lg ${
+                                isBuyer
+                                  ? 'bg-muted'
+                                  : 'bg-primary text-primary-foreground'
+                              }`}
+                            >
+                              <p className="text-xs font-medium mb-1">
+                                {isBuyer ? txDetail.buyer?.username : txDetail.seller?.username}
+                              </p>
+                              <p className="text-sm">{msg.content}</p>
+                              <p className={`text-[10px] mt-1 ${isBuyer ? 'text-muted-foreground' : 'text-primary-foreground/70'}`}>
+                                {new Date(msg.createdAt).toLocaleString()}
+                              </p>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </TabsContent>
+
+                <TabsContent value="reviews" className="mt-4">
+                  {!txDetail.reviews?.length ? (
+                    <p className="text-muted-foreground text-center py-4">No reviews</p>
+                  ) : (
+                    <div className="space-y-3">
+                      {txDetail.reviews.map((review: any) => (
+                        <div key={review.id} className="p-3 border rounded-lg">
+                          <div className="flex items-center gap-2 mb-1">
+                            <div className="flex">
+                              {Array.from({ length: 5 }).map((_, i) => (
+                                <Star
+                                  key={i}
+                                  className={`h-3 w-3 ${
+                                    i < review.rating ? 'text-yellow-500 fill-yellow-500' : 'text-muted-foreground'
+                                  }`}
+                                />
+                              ))}
+                            </div>
+                            <Badge variant="outline" className="text-xs">
+                              {review.reviewerId === txDetail.buyerId ? 'Buyer' : 'Seller'}
+                            </Badge>
+                          </div>
+                          {review.comment && (
+                            <p className="text-sm">{review.comment}</p>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </TabsContent>
+              </Tabs>
+            </div>
+          ) : null}
+        </DialogContent>
+      </Dialog>
+
       {/* Refund Modal */}
       <Dialog open={showRefundModal} onOpenChange={setShowRefundModal}>
         <DialogContent>
@@ -403,7 +621,7 @@ export default function AdminTransactionsPage() {
               This will refund the full amount to the buyer. This action cannot be undone.
             </DialogDescription>
           </DialogHeader>
-          
+
           {selectedTransaction && (
             <div className="py-4">
               <Card className="mb-4">

@@ -6,7 +6,7 @@ import crypto from 'crypto';
 import { Server as SocketServer } from 'socket.io';
 import { config } from '../config';
 import { prisma } from '../lib/prisma';
-import { emailService } from './email.service';
+import { emailQueue } from '../lib/queue';
 import { logger } from '../utils/logger';
 import { createNotifications } from '../utils/notifications';
 import { emitNotification, emitTransactionUpdate } from '../websocket';
@@ -101,7 +101,7 @@ class PaymentService {
    * Capture payment after verification (escrow funded)
    */
   async capturePayment(transactionId: string, paymentDetails: VerifyPaymentParams, io?: SocketServer) {
-    const { razorpayOrderId, razorpayPaymentId, razorpaySignature } = paymentDetails;
+    const { razorpayPaymentId, razorpaySignature } = paymentDetails;
 
     // Verify signature
     const isValid = this.verifyPaymentSignature(paymentDetails);
@@ -109,12 +109,27 @@ class PaymentService {
       throw new Error('Invalid payment signature');
     }
 
+    // Idempotency: check if already captured
+    const existing = await prisma.transaction.findUnique({ where: { id: transactionId } });
+    if (!existing) {
+      throw new Error('Transaction not found');
+    }
+    if (existing.paymentStatus === 'captured') {
+      return (await prisma.transaction.findUnique({
+        where: { id: transactionId },
+        include: { listing: true, buyer: true, seller: true },
+      }))!;
+    }
+    if (existing.status !== 'pending_payment' && existing.status !== 'initiated') {
+      throw new Error('Transaction is not awaiting payment');
+    }
+
     // Get payment details from Razorpay
     const razorpayClient = getRazorpayClient();
     if (!razorpayClient) {
       throw new Error('Razorpay client not configured');
     }
-    const payment = await razorpayClient.payments.fetch(razorpayPaymentId);
+    await razorpayClient.payments.fetch(razorpayPaymentId);
 
     // Update transaction
     const transaction = await prisma.transaction.update({
@@ -133,15 +148,18 @@ class PaymentService {
       },
     });
 
-    // Send notification emails
-    await emailService.sendEscrowFundedEmail({
-      buyerEmail: transaction.buyer.email,
-      buyerName: transaction.buyer.firstName || transaction.buyer.username,
-      sellerEmail: transaction.seller.email,
-      sellerName: transaction.seller.firstName || transaction.seller.username,
-      listingTitle: transaction.listing.displayName || transaction.listing.username,
-      amount: transaction.amount,
-      transactionId: transaction.id,
+    // Send notification emails via queue
+    await emailQueue.add('send-email', {
+      type: 'escrow_funded',
+      params: {
+        buyerEmail: transaction.buyer.email,
+        buyerName: transaction.buyer.firstName || transaction.buyer.username,
+        sellerEmail: transaction.seller.email,
+        sellerName: transaction.seller.firstName || transaction.seller.username,
+        listingTitle: transaction.listing.displayName || transaction.listing.username,
+        amount: transaction.amount,
+        transactionId: transaction.id,
+      },
     });
 
     // Create notifications
@@ -225,16 +243,19 @@ class PaymentService {
       },
     });
 
-    // Send completion emails
-    await emailService.sendTransactionCompleteEmail({
-      buyerEmail: transaction.buyer.email,
-      buyerName: transaction.buyer.firstName || transaction.buyer.username,
-      sellerEmail: transaction.seller.email,
-      sellerName: transaction.seller.firstName || transaction.seller.username,
-      listingTitle: transaction.listing.displayName || transaction.listing.username,
-      amount: transaction.amount,
-      sellerPayout: transaction.sellerPayout,
-      transactionId: transaction.id,
+    // Send completion emails via queue
+    await emailQueue.add('send-email', {
+      type: 'transaction_complete',
+      params: {
+        buyerEmail: transaction.buyer.email,
+        buyerName: transaction.buyer.firstName || transaction.buyer.username,
+        sellerEmail: transaction.seller.email,
+        sellerName: transaction.seller.firstName || transaction.seller.username,
+        listingTitle: transaction.listing.displayName || transaction.listing.username,
+        amount: transaction.amount,
+        sellerPayout: transaction.sellerPayout,
+        transactionId: transaction.id,
+      },
     });
 
     // Create notifications
@@ -340,15 +361,18 @@ class PaymentService {
       },
     });
 
-    // Send refund emails
-    await emailService.sendRefundEmail({
-      buyerEmail: transaction.buyer.email,
-      buyerName: transaction.buyer.firstName || transaction.buyer.username,
-      sellerEmail: transaction.seller.email,
-      sellerName: transaction.seller.firstName || transaction.seller.username,
-      amount: transaction.amount,
-      reason,
-      transactionId: transaction.id,
+    // Send refund emails via queue
+    await emailQueue.add('send-email', {
+      type: 'refund',
+      params: {
+        buyerEmail: transaction.buyer.email,
+        buyerName: transaction.buyer.firstName || transaction.buyer.username,
+        sellerEmail: transaction.seller.email,
+        sellerName: transaction.seller.firstName || transaction.seller.username,
+        amount: transaction.amount,
+        reason,
+        transactionId: transaction.id,
+      },
     });
 
     // Create notifications
@@ -444,42 +468,19 @@ class PaymentService {
       throw new Error('Invalid webhook signature');
     }
 
-    const event = body.event;
-    const payload = body.payload;
+    const { webhookQueue } = await import('../lib/queue');
 
-    switch (event) {
-      case 'payment.captured': {
-        // Payment was captured
-        const paymentCaptured = payload.payment.entity;
-        console.log('Payment captured:', paymentCaptured.id);
-        break;
-      }
+    // Derive a dedup key from the payment/refund entity ID
+    const deduplicationId =
+      body.payload?.payment?.entity?.id ||
+      body.payload?.refund?.entity?.id ||
+      undefined;
 
-      case 'payment.failed': {
-        // Payment failed
-        const paymentFailed = payload.payment.entity;
-        const orderId = paymentFailed.order_id;
-        
-        await prisma.transaction.updateMany({
-          where: { razorpayOrderId: orderId },
-          data: {
-            paymentStatus: 'failed',
-            status: 'payment_failed',
-          },
-        });
-        break;
-      }
-
-      case 'refund.created': {
-        // Refund was created
-        const refund = payload.refund.entity;
-        console.log('Refund created:', refund.id);
-        break;
-      }
-
-      default:
-        console.log('Unhandled webhook event:', event);
-    }
+    await webhookQueue.add(
+      'process-webhook',
+      { event: body.event, payload: body.payload },
+      deduplicationId ? { jobId: deduplicationId } : undefined
+    );
 
     return { received: true };
   }

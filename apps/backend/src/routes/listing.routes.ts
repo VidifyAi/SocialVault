@@ -2,12 +2,13 @@ import { Router, Response, NextFunction } from 'express';
 import multer from 'multer';
 import { listingService } from '../services/listing.service';
 import { validate } from '../middleware/validate';
-import { 
-  authenticate, 
-  optionalAuth, 
+import {
+  authenticate,
+  optionalAuth,
   authorize,
-  AuthenticatedRequest 
+  AuthenticatedRequest
 } from '../middleware/auth';
+import { requireKyc } from '../middleware/kycCheck';
 import { 
   createListingSchema, 
   updateListingSchema,
@@ -207,6 +208,7 @@ router.post(
 router.post(
   '/',
   authenticate,
+  requireKyc,
   upload.array('images', 10), // Handle image uploads
   async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
     try {

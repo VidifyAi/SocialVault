@@ -5,13 +5,14 @@ import { Router, Response } from 'express';
 import { Server as SocketServer } from 'socket.io';
 import { paymentService } from '../services/payment.service';
 import { authenticate, AuthenticatedRequest } from '../middleware/auth';
+import { requireKyc } from '../middleware/kycCheck';
 import { prisma } from '../lib/prisma';
 import { io } from '../index';
 
 const router: Router = Router();
 
 // POST /payments/create-order - Create Razorpay order
-router.post('/create-order', authenticate, async (req: AuthenticatedRequest, res: Response) => {
+router.post('/create-order', authenticate, requireKyc, async (req: AuthenticatedRequest, res: Response) => {
   try {
     const { transactionId } = req.body;
 

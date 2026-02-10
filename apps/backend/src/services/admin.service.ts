@@ -2,7 +2,7 @@
 // Handles administrative operations: moderation, disputes, analytics
 
 import { prisma } from '../lib/prisma';
-import { emailService } from './email.service';
+import { emailQueue } from '../lib/queue';
 import { paymentService } from './payment.service';
 
 interface PaginationParams {
@@ -20,6 +20,7 @@ interface UserFilters extends PaginationParams {
   status?: string;
   role?: string;
   kycStatus?: string;
+  search?: string;
 }
 
 interface TransactionFilters extends PaginationParams {
@@ -176,7 +177,7 @@ class AdminService {
   // ==================== USER MANAGEMENT ====================
 
   async getUsers(filters: UserFilters) {
-    const { page = 1, limit = 20, status, role, kycStatus } = filters;
+    const { page = 1, limit = 20, status, role, kycStatus, search } = filters;
     const skip = (page - 1) * limit;
 
     const where: any = {
@@ -186,6 +187,12 @@ class AdminService {
     if (status) where.status = status;
     if (role) where.role = role;
     if (kycStatus) where.kycStatus = kycStatus;
+    if (search) {
+      where.OR = [
+        { username: { contains: search, mode: 'insensitive' } },
+        { email: { contains: search, mode: 'insensitive' } },
+      ];
+    }
 
     const [users, total] = await Promise.all([
       prisma.user.findMany({
@@ -346,6 +353,24 @@ class AdminService {
     };
   }
 
+  async getListingDetails(listingId: string) {
+    const listing = await prisma.listing.findUnique({
+      where: { id: listingId },
+      include: {
+        seller: {
+          select: {
+            id: true,
+            username: true,
+            email: true,
+            trustScore: true,
+            status: true,
+          },
+        },
+      },
+    });
+    return listing;
+  }
+
   async verifyListing(listingId: string, adminId: string) {
     const listing = await prisma.listing.update({
       where: { id: listingId },
@@ -358,13 +383,16 @@ class AdminService {
       },
     });
 
-    // Send notification email
-    await emailService.sendListingApprovedEmail(
-      listing.seller.email,
-      listing.seller.firstName || listing.seller.username,
-      listing.displayName || listing.username,
-      listing.id
-    );
+    // Send notification email via queue
+    await emailQueue.add('send-email', {
+      type: 'listing_approved',
+      params: {
+        email: listing.seller.email,
+        name: listing.seller.firstName || listing.seller.username,
+        listingTitle: listing.displayName || listing.username,
+        listingId: listing.id,
+      },
+    });
 
     // Create notification
     await prisma.notification.create({
@@ -402,13 +430,16 @@ class AdminService {
       },
     });
 
-    // Send notification email
-    await emailService.sendListingRejectedEmail(
-      listing.seller.email,
-      listing.seller.firstName || listing.seller.username,
-      listing.displayName || listing.username,
-      reason
-    );
+    // Send notification email via queue
+    await emailQueue.add('send-email', {
+      type: 'listing_rejected',
+      params: {
+        email: listing.seller.email,
+        name: listing.seller.firstName || listing.seller.username,
+        listingTitle: listing.displayName || listing.username,
+        reason,
+      },
+    });
 
     // Create notification
     await prisma.notification.create({
@@ -643,20 +674,26 @@ class AdminService {
       },
     });
 
-    // Send notifications
-    await emailService.sendDisputeResolvedEmail(
-      dispute.transaction.buyer.email,
-      dispute.transaction.buyer.firstName || dispute.transaction.buyer.username,
-      resolutionText,
-      disputeId
-    );
+    // Send notifications via queue
+    await emailQueue.add('send-email', {
+      type: 'dispute_resolved',
+      params: {
+        email: dispute.transaction.buyer.email,
+        name: dispute.transaction.buyer.firstName || dispute.transaction.buyer.username,
+        resolution: resolutionText,
+        disputeId,
+      },
+    });
 
-    await emailService.sendDisputeResolvedEmail(
-      dispute.transaction.seller.email,
-      dispute.transaction.seller.firstName || dispute.transaction.seller.username,
-      resolutionText,
-      disputeId
-    );
+    await emailQueue.add('send-email', {
+      type: 'dispute_resolved',
+      params: {
+        email: dispute.transaction.seller.email,
+        name: dispute.transaction.seller.firstName || dispute.transaction.seller.username,
+        resolution: resolutionText,
+        disputeId,
+      },
+    });
 
     // Log audit
     await prisma.auditLog.create({

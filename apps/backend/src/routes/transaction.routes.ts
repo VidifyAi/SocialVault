@@ -4,6 +4,7 @@ import { transactionService } from '../services/transaction.service';
 import { uploadService } from '../services/upload.service';
 import { validate } from '../middleware/validate';
 import { authenticate, AuthenticatedRequest } from '../middleware/auth';
+import { requireKyc } from '../middleware/kycCheck';
 import { 
   initiateTransactionSchema, 
   updateTransferStepSchema 
@@ -93,6 +94,7 @@ router.get(
 router.post(
   '/',
   authenticate,
+  requireKyc,
   validate(initiateTransactionSchema),
   async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
     try {

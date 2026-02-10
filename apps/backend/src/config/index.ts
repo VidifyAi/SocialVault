@@ -36,6 +36,20 @@ export const config = {
   // YouTube Data API v3
   youtubeApiKey: process.env.YOUTUBE_API_KEY || '',
 
+  // Redis
+  redisUrl: process.env.REDIS_URL || 'redis://localhost:6379',
+
+  // Instagram Commercial Scraper (Apify)
+  instagramScraperApiKey: process.env.INSTAGRAM_SCRAPER_API_KEY || '',
+  instagramScraperBaseUrl: process.env.INSTAGRAM_SCRAPER_BASE_URL || 'https://api.apify.com/v2',
+
+  // YouTube Quota
+  youtubeQuotaLimit: parseInt(process.env.YOUTUBE_QUOTA_LIMIT || '10000', 10),
+
+  // Fraud Guardrails
+  maxListingsPerUser: parseInt(process.env.MAX_LISTINGS_PER_USER || '10', 10),
+  maxTransactionsPerDay: parseInt(process.env.MAX_TRANSACTIONS_PER_DAY || '5', 10),
+
   // Platform Fees
   platformFeePercent: 5, // 5%
   minPlatformFee: 100,   // ₹100

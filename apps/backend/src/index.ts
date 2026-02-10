@@ -19,6 +19,8 @@ import { uploadRouter } from './routes/upload.routes';
 import scraperRouter from './routes/scraper.routes';
 import { setupWebSocket } from './websocket';
 import { prisma } from './lib/prisma';
+import { redis } from './lib/redis';
+import { setupWorkers, shutdownWorkers } from './workers';
 
 const app: Express = express();
 const httpServer = createServer(app);
@@ -93,6 +95,10 @@ async function main() {
     await prisma.$connect();
     logger.info('Connected to database');
 
+    // Connect to Redis and start workers
+    await redis.connect();
+    await setupWorkers();
+
     const HOST = process.env.HOST || '0.0.0.0';
     httpServer.listen(PORT, HOST, () => {
       logger.info(`Server running on ${HOST}:${PORT}`);
@@ -107,6 +113,8 @@ async function main() {
 // Graceful shutdown
 process.on('SIGTERM', async () => {
   logger.info('SIGTERM received, shutting down gracefully');
+  await shutdownWorkers();
+  await redis.quit();
   await prisma.$disconnect();
   httpServer.close(() => {
     logger.info('HTTP server closed');

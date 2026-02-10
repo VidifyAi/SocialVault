@@ -6,18 +6,21 @@ import { useUser } from '@clerk/nextjs';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table';
 import { api } from '@/lib/api';
-import { 
-  Users, 
-  ShoppingBag, 
-  CreditCard, 
+import {
+  Users,
+  ShoppingBag,
+  CreditCard,
   AlertTriangle,
-  TrendingUp,
   DollarSign,
-  Clock,
-  CheckCircle,
-  XCircle,
   Shield,
   BarChart3,
   MessageSquare
@@ -74,7 +77,7 @@ export default function AdminDashboard() {
 
   if (!isLoaded || loading) {
     return (
-      <div className="flex items-center justify-center min-h-screen">
+      <div className="flex items-center justify-center min-h-[50vh]">
         <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
       </div>
     );
@@ -82,7 +85,7 @@ export default function AdminDashboard() {
 
   if (error) {
     return (
-      <div className="flex flex-col items-center justify-center min-h-screen gap-4">
+      <div className="flex flex-col items-center justify-center min-h-[50vh] gap-4">
         <Shield className="h-16 w-16 text-red-500" />
         <h1 className="text-2xl font-bold">Access Denied</h1>
         <p className="text-muted-foreground">{error}</p>
@@ -103,21 +106,72 @@ export default function AdminDashboard() {
     }).format(amount);
   };
 
+  const hasPendingAlerts =
+    stats.listings.pendingVerification > 0 ||
+    stats.disputes.open > 0 ||
+    (stats.flaggedMessages?.highSeverity ?? 0) > 0;
+
+  const maxRevenue = Math.max(
+    stats.revenue.today.revenue,
+    stats.revenue.last7Days.revenue,
+    stats.revenue.last30Days.revenue,
+    1
+  );
+
   return (
-    <div className="container mx-auto py-8 px-4">
-      <div className="flex items-center justify-between mb-8">
-        <div>
-          <h1 className="text-3xl font-bold">Admin Dashboard</h1>
-          <p className="text-muted-foreground">Monitor and manage the SocialSwapr platform</p>
-        </div>
-        <Badge variant="outline" className="text-lg px-4 py-2">
-          <Shield className="h-4 w-4 mr-2" />
-          Admin
-        </Badge>
+    <div className="space-y-6">
+      <div>
+        <h1 className="text-3xl font-bold">Admin Dashboard</h1>
+        <p className="text-muted-foreground">Monitor and manage the SocialSwapr platform</p>
       </div>
 
+      {/* Pending Action Alerts */}
+      {hasPendingAlerts && (
+        <div className="grid gap-3 md:grid-cols-3">
+          {stats.listings.pendingVerification > 0 && (
+            <Link href="/admin/listings?verificationStatus=pending">
+              <Card className="border-yellow-500/50 bg-yellow-50 dark:bg-yellow-900/10 cursor-pointer hover:border-yellow-500 transition-colors">
+                <CardContent className="flex items-center gap-3 p-4">
+                  <ShoppingBag className="h-5 w-5 text-yellow-600" />
+                  <div>
+                    <p className="font-medium text-sm">{stats.listings.pendingVerification} listings pending review</p>
+                    <p className="text-xs text-muted-foreground">Click to review</p>
+                  </div>
+                </CardContent>
+              </Card>
+            </Link>
+          )}
+          {stats.disputes.open > 0 && (
+            <Link href="/admin/disputes?status=opened">
+              <Card className="border-red-500/50 bg-red-50 dark:bg-red-900/10 cursor-pointer hover:border-red-500 transition-colors">
+                <CardContent className="flex items-center gap-3 p-4">
+                  <AlertTriangle className="h-5 w-5 text-red-600" />
+                  <div>
+                    <p className="font-medium text-sm">{stats.disputes.open} open disputes</p>
+                    <p className="text-xs text-muted-foreground">Requires attention</p>
+                  </div>
+                </CardContent>
+              </Card>
+            </Link>
+          )}
+          {(stats.flaggedMessages?.highSeverity ?? 0) > 0 && (
+            <Link href="/admin/messages">
+              <Card className="border-red-500/50 bg-red-50 dark:bg-red-900/10 cursor-pointer hover:border-red-500 transition-colors">
+                <CardContent className="flex items-center gap-3 p-4">
+                  <MessageSquare className="h-5 w-5 text-red-600" />
+                  <div>
+                    <p className="font-medium text-sm">{stats.flaggedMessages!.highSeverity} high-severity flagged messages</p>
+                    <p className="text-xs text-muted-foreground">Requires review</p>
+                  </div>
+                </CardContent>
+              </Card>
+            </Link>
+          )}
+        </div>
+      )}
+
       {/* Quick Stats */}
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4 mb-8">
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Total Users</CardTitle>
@@ -171,124 +225,59 @@ export default function AdminDashboard() {
         </Card>
       </div>
 
-      {/* Revenue Overview */}
-      <div className="grid gap-4 md:grid-cols-3 mb-8">
+      {/* Revenue Comparison Bar Chart + Escrow Status */}
+      <div className="grid gap-4 md:grid-cols-2">
         <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium flex items-center">
-              <Clock className="h-4 w-4 mr-2" />
-              Today
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{formatCurrency(stats.revenue.today.revenue)}</div>
-            <p className="text-xs text-muted-foreground">
-              {stats.revenue.today.transactions} transactions
-            </p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium flex items-center">
-              <TrendingUp className="h-4 w-4 mr-2" />
-              Last 7 Days
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{formatCurrency(stats.revenue.last7Days.revenue)}</div>
-            <p className="text-xs text-muted-foreground">
-              {stats.revenue.last7Days.transactions} transactions
-            </p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium flex items-center">
+          <CardHeader>
+            <CardTitle className="flex items-center text-base">
               <BarChart3 className="h-4 w-4 mr-2" />
-              Last 30 Days
+              Revenue Comparison
             </CardTitle>
           </CardHeader>
+          <CardContent className="space-y-4">
+            {[
+              { label: 'Today', data: stats.revenue.today },
+              { label: 'Last 7 Days', data: stats.revenue.last7Days },
+              { label: 'Last 30 Days', data: stats.revenue.last30Days },
+            ].map((period) => (
+              <div key={period.label} className="space-y-1">
+                <div className="flex items-center justify-between text-sm">
+                  <span className="text-muted-foreground">{period.label}</span>
+                  <span className="font-medium">{formatCurrency(period.data.revenue)}</span>
+                </div>
+                <div className="h-3 bg-muted rounded-full overflow-hidden">
+                  <div
+                    className="h-full bg-primary rounded-full transition-all duration-500"
+                    style={{
+                      width: `${Math.max((period.data.revenue / maxRevenue) * 100, 2)}%`,
+                    }}
+                  />
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  {period.data.transactions} txns &middot; {formatCurrency(period.data.gmv)} GMV
+                </p>
+              </div>
+            ))}
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center text-base">
+              <CreditCard className="h-4 w-4 mr-2" />
+              Escrow Status
+            </CardTitle>
+            <CardDescription>Current funds held in escrow</CardDescription>
+          </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{formatCurrency(stats.revenue.last30Days.revenue)}</div>
-            <p className="text-xs text-muted-foreground">
-              {stats.revenue.last30Days.transactions} transactions
+            <div className="text-3xl font-bold text-green-600">
+              {formatCurrency(stats.financials.escrowFunds)}
+            </div>
+            <p className="text-sm text-muted-foreground mt-2">
+              Funds will be released upon successful transfer completion
             </p>
           </CardContent>
         </Card>
-      </div>
-
-      {/* Escrow Status */}
-      <Card className="mb-8">
-        <CardHeader>
-          <CardTitle className="flex items-center">
-            <CreditCard className="h-5 w-5 mr-2" />
-            Escrow Status
-          </CardTitle>
-          <CardDescription>Current funds held in escrow</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="text-3xl font-bold text-green-600">
-            {formatCurrency(stats.financials.escrowFunds)}
-          </div>
-          <p className="text-sm text-muted-foreground mt-2">
-            Funds will be released upon successful transfer completion
-          </p>
-        </CardContent>
-      </Card>
-
-      {/* Quick Actions */}
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-5 mb-8">
-        <Button asChild variant="outline" className="h-20">
-          <Link href="/admin/users" className="flex flex-col items-center gap-2">
-            <Users className="h-6 w-6" />
-            <span>Manage Users</span>
-          </Link>
-        </Button>
-
-        <Button asChild variant="outline" className="h-20">
-          <Link href="/admin/listings" className="flex flex-col items-center gap-2">
-            <ShoppingBag className="h-6 w-6" />
-            <span>Review Listings</span>
-            {stats.listings.pendingVerification > 0 && (
-              <Badge variant="destructive" className="ml-2">
-                {stats.listings.pendingVerification}
-              </Badge>
-            )}
-          </Link>
-        </Button>
-
-        <Button asChild variant="outline" className="h-20">
-          <Link href="/admin/transactions" className="flex flex-col items-center gap-2">
-            <CreditCard className="h-6 w-6" />
-            <span>Transactions</span>
-          </Link>
-        </Button>
-
-        <Button asChild variant="outline" className="h-20">
-          <Link href="/admin/disputes" className="flex flex-col items-center gap-2">
-            <AlertTriangle className="h-6 w-6" />
-            <span>Disputes</span>
-            {stats.disputes.open > 0 && (
-              <Badge variant="destructive" className="ml-2">
-                {stats.disputes.open}
-              </Badge>
-            )}
-          </Link>
-        </Button>
-
-        <Button asChild variant="outline" className="h-20">
-          <Link href="/admin/messages" className="flex flex-col items-center gap-2">
-            <MessageSquare className="h-6 w-6" />
-            <span>Flagged Messages</span>
-            {stats.flaggedMessages && stats.flaggedMessages.highSeverity > 0 && (
-              <Badge variant="destructive" className="ml-2">
-                {stats.flaggedMessages.highSeverity}
-              </Badge>
-            )}
-          </Link>
-        </Button>
       </div>
 
       {/* Recent Transactions */}
@@ -297,50 +286,53 @@ export default function AdminDashboard() {
           <CardTitle>Recent Transactions</CardTitle>
           <CardDescription>Latest platform activity</CardDescription>
         </CardHeader>
-        <CardContent>
-          <div className="space-y-4">
-            {stats.recentTransactions.length === 0 ? (
-              <p className="text-muted-foreground text-center py-4">No transactions yet</p>
-            ) : (
-              stats.recentTransactions.map((tx) => (
-                <div key={tx.id} className="flex items-center justify-between p-4 border rounded-lg">
-                  <div className="flex items-center gap-4">
-                    <div className={`p-2 rounded-full ${
-                      tx.status === 'completed' ? 'bg-green-100' : 
-                      tx.status === 'escrow_funded' ? 'bg-blue-100' : 
-                      'bg-yellow-100'
-                    }`}>
-                      {tx.status === 'completed' ? (
-                        <CheckCircle className="h-4 w-4 text-green-600" />
-                      ) : tx.status === 'escrow_funded' ? (
-                        <CreditCard className="h-4 w-4 text-blue-600" />
-                      ) : (
-                        <Clock className="h-4 w-4 text-yellow-600" />
-                      )}
-                    </div>
-                    <div>
-                      <p className="font-medium">{tx.listing?.displayName || tx.listing?.username}</p>
-                      <p className="text-sm text-muted-foreground">
-                        {tx.buyer?.username} → {tx.seller?.username}
-                      </p>
-                    </div>
-                  </div>
-                  <div className="text-right">
-                    <p className="font-medium">{formatCurrency(tx.amount)}</p>
-                    <Badge variant={
-                      tx.status === 'completed' ? 'default' :
-                      tx.status === 'escrow_funded' ? 'secondary' :
-                      'outline'
-                    }>
-                      {tx.status.replace('_', ' ')}
-                    </Badge>
-                  </div>
-                </div>
-              ))
-            )}
-          </div>
+        <CardContent className="p-0">
+          {stats.recentTransactions.length === 0 ? (
+            <p className="text-muted-foreground text-center py-8">No transactions yet</p>
+          ) : (
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Listing</TableHead>
+                  <TableHead>Parties</TableHead>
+                  <TableHead>Amount</TableHead>
+                  <TableHead>Status</TableHead>
+                  <TableHead>Date</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {stats.recentTransactions.map((tx) => (
+                  <TableRow key={tx.id}>
+                    <TableCell className="font-medium">
+                      {tx.listing?.displayName || tx.listing?.username || '-'}
+                    </TableCell>
+                    <TableCell>
+                      <div className="text-sm">
+                        <span className="text-muted-foreground">
+                          {tx.buyer?.username} → {tx.seller?.username}
+                        </span>
+                      </div>
+                    </TableCell>
+                    <TableCell>{formatCurrency(tx.amount)}</TableCell>
+                    <TableCell>
+                      <Badge variant={
+                        tx.status === 'completed' ? 'default' :
+                        tx.status === 'escrow_funded' ? 'secondary' :
+                        'outline'
+                      }>
+                        {tx.status.replace(/_/g, ' ')}
+                      </Badge>
+                    </TableCell>
+                    <TableCell className="text-muted-foreground">
+                      {new Date(tx.createdAt).toLocaleDateString()}
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          )}
           {stats.recentTransactions.length > 0 && (
-            <div className="mt-4">
+            <div className="p-4 border-t">
               <Button asChild variant="outline" className="w-full">
                 <Link href="/admin/transactions">View All Transactions</Link>
               </Button>

@@ -59,13 +59,14 @@ router.get('/messages/flagged/stats', async (req: AuthenticatedRequest, res: Res
 // GET /admin/users - List all users with filters
 router.get('/users', async (req: AuthenticatedRequest, res: Response) => {
   try {
-    const { page, limit, status, role, kycStatus } = req.query;
+    const { page, limit, status, role, kycStatus, search } = req.query;
     const result = await adminService.getUsers({
       page: page ? parseInt(page as string) : undefined,
       limit: limit ? parseInt(limit as string) : undefined,
       status: status as string,
       role: role as string,
       kycStatus: kycStatus as string,
+      search: search as string,
     });
     res.json({ success: true, data: result });
   } catch (error: any) {
@@ -137,6 +138,20 @@ router.get('/listings', async (req: AuthenticatedRequest, res: Response) => {
     res.json({ success: true, data: result });
   } catch (error: any) {
     console.error('Error fetching listings:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// GET /admin/listings/:id - Get listing details
+router.get('/listings/:id', async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const listing = await adminService.getListingDetails(req.params.id);
+    if (!listing) {
+      return res.status(404).json({ success: false, error: 'Listing not found' });
+    }
+    res.json({ success: true, data: listing });
+  } catch (error: any) {
+    console.error('Error fetching listing:', error);
     res.status(500).json({ success: false, error: error.message });
   }
 });

@@ -1,4 +1,7 @@
 import axios from 'axios';
+import { config } from '../../config';
+import { cache } from '../../lib/redis';
+import { logger } from '../../utils/logger';
 import { ScraperResult } from './types';
 
 /**
@@ -8,25 +11,54 @@ import { ScraperResult } from './types';
  *   1. channels.list?id={id} if input looks like a channel ID (1 unit)
  *   2. channels.list?forHandle=@{handle} for handle-based lookup (1 unit)
  *   3. search.list?q={handle}&type=channel as fallback (100 units)
+ *
+ * Includes Redis-based quota tracking with threshold warnings.
  */
 
 const YOUTUBE_API_BASE = 'https://www.googleapis.com/youtube/v3';
 const TIMEOUT = 8000;
+const QUOTA_KEY_PREFIX = 'youtube:quota:';
+const UNIT_COSTS = { channelsList: 1, search: 100 };
 
 function getApiKey(): string {
-  const key = process.env.YOUTUBE_API_KEY || '';
+  const key = config.youtubeApiKey || '';
   if (!key) {
-    console.warn('⚠️  YOUTUBE_API_KEY not set. YouTube scraper will fail.');
+    logger.warn('YOUTUBE_API_KEY not set. YouTube scraper will fail.');
   }
   return key;
 }
 
 function looksLikeChannelId(input: string): boolean {
-  // Channel IDs start with UC and are 24 chars long
   return /^UC[\w-]{22}$/.test(input);
 }
 
-async function lookupByChannelId(channelId: string, apiKey: string): Promise<any | null> {
+async function getQuotaKey(): Promise<string> {
+  // YouTube resets quota at midnight Pacific Time
+  const now = new Date();
+  const pst = new Date(now.toLocaleString('en-US', { timeZone: 'America/Los_Angeles' }));
+  return `${QUOTA_KEY_PREFIX}${pst.toISOString().slice(0, 10)}`;
+}
+
+async function trackQuota(units: number): Promise<void> {
+  const key = await getQuotaKey();
+  const current = parseInt((await cache.get(key)) || '0', 10);
+  await cache.set(key, String(current + units), 86400 * 2); // 2-day TTL
+
+  const remaining = config.youtubeQuotaLimit - (current + units);
+  if (remaining <= 0) {
+    logger.error('YouTube API quota exhausted for today');
+  } else if (remaining < 1000) {
+    logger.warn(`YouTube API quota low: ${remaining} units remaining`);
+  }
+}
+
+async function getRemainingQuota(): Promise<number> {
+  const key = await getQuotaKey();
+  const used = parseInt((await cache.get(key)) || '0', 10);
+  return config.youtubeQuotaLimit - used;
+}
+
+async function lookupByChannelId(channelId: string, apiKey: string): Promise<any> {
   const res = await axios.get(`${YOUTUBE_API_BASE}/channels`, {
     params: {
       part: 'snippet,statistics',
@@ -35,10 +67,12 @@ async function lookupByChannelId(channelId: string, apiKey: string): Promise<any
     },
     timeout: TIMEOUT,
   });
-  return res.data.items?.[0] ?? null;
+  const item = res.data.items?.[0] ?? null;
+  if (item) await trackQuota(UNIT_COSTS.channelsList);
+  return item;
 }
 
-async function lookupByHandle(handle: string, apiKey: string): Promise<any | null> {
+async function lookupByHandle(handle: string, apiKey: string): Promise<any> {
   const cleanHandle = handle.replace(/^@/, '');
   const res = await axios.get(`${YOUTUBE_API_BASE}/channels`, {
     params: {
@@ -48,10 +82,12 @@ async function lookupByHandle(handle: string, apiKey: string): Promise<any | nul
     },
     timeout: TIMEOUT,
   });
-  return res.data.items?.[0] ?? null;
+  const item = res.data.items?.[0] ?? null;
+  if (item) await trackQuota(UNIT_COSTS.channelsList);
+  return item;
 }
 
-async function lookupBySearch(query: string, apiKey: string): Promise<any | null> {
+async function lookupBySearch(query: string, apiKey: string): Promise<any> {
   const searchRes = await axios.get(`${YOUTUBE_API_BASE}/search`, {
     params: {
       part: 'snippet',
@@ -66,6 +102,8 @@ async function lookupBySearch(query: string, apiKey: string): Promise<any | null
   const channelId = searchRes.data.items?.[0]?.snippet?.channelId;
   if (!channelId) return null;
 
+  // search cost is tracked, channelsList cost tracked inside lookupByChannelId
+  await trackQuota(UNIT_COSTS.search);
   return lookupByChannelId(channelId, apiKey);
 }
 
@@ -87,8 +125,12 @@ export async function scrapeYouTube(username: string): Promise<ScraperResult> {
       channel = await lookupByHandle(clean, apiKey);
     }
 
-    // 3. Fallback to search (100 units)
+    // 3. Fallback to search (100 units) — only if we have budget
     if (!channel) {
+      const remaining = await getRemainingQuota();
+      if (remaining < 200) {
+        throw new Error('USER_NOT_FOUND'); // Degrade gracefully when quota is low
+      }
       channel = await lookupBySearch(clean, apiKey);
     }
   } catch (error: any) {

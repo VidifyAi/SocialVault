@@ -2,6 +2,7 @@ import http from 'http';
 import https from 'https';
 import { prisma } from '../lib/prisma';
 import { cache } from '../lib/redis';
+import { config } from '../config';
 import { NotFoundError, ForbiddenError, BadRequestError } from '../utils/errors';
 import { Prisma } from '@prisma/client';
 import { ListingStatus } from '@socialswapr/types';
@@ -95,7 +96,7 @@ const extractProfileInfo = (page: string) => {
 
   // 2. Bio/Description Extraction
   const ogDescMatch = page.match(/property=["']og:description["']\s+content=["']([^"']+)["']/i);
-  let ogDesc = ogDescMatch ? ogDescMatch[1].trim() : '';
+  const ogDesc = ogDescMatch ? ogDescMatch[1].trim() : '';
 
   // 3. Image Extraction
   const ogImage = page.match(/property=["']og:image["']\s+content=["']([^"']+)["']/i);
@@ -149,7 +150,7 @@ const extractProfileInfo = (page: string) => {
 
   // Final Cleanup
   info.title = rawTitle
-    .replace(/\s*[•|-|\|]\s*(Instagram|TikTok|YouTube|Twitter|X|Facebook|Snapchat).*/gi, '')
+    .replace(/\s*[•|\-|]\s*(Instagram|TikTok|YouTube|Twitter|X|Facebook|Snapchat).*/gi, '')
     .trim() || undefined;
   
   info.bio = ogDesc || undefined;
@@ -290,9 +291,13 @@ export class ListingService {
   }
 
   async create(data: CreateListingData) {
-    // Transform frontend form data to database format
-    // Frontend sends: title, platform, category, handle, followers, engagement, accountAge, monthlyRevenue
-    // Database expects: username, niche, metrics (JSON), accountAge (number)
+    // Enforce listing limit per user
+    const activeListingCount = await prisma.listing.count({
+      where: { sellerId: data.sellerId, status: { in: ['active', 'pending_review', 'draft'] } },
+    });
+    if (activeListingCount >= config.maxListingsPerUser) {
+      throw new BadRequestError(`You can have at most ${config.maxListingsPerUser} active listings`);
+    }
 
     const violations = findDescriptionPolicyViolations(data.description || '');
     if (violations.length > 0) {
