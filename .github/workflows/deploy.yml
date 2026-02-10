@@ -32,7 +32,7 @@ jobs:
         with:
           creds: ${{ secrets.AZURE_CREDENTIALS }}
 
-      - name: Deploy infra (Bicep) and capture outputs
+      - name: Deploy infra (Bicep)
         env:
           FRONTEND_URL: ${{ secrets.FRONTEND_URL }}
           API_BASE_URL: ${{ secrets.API_BASE_URL }}
@@ -52,14 +52,16 @@ jobs:
           echo "ACR_LOGIN_SERVER=$(jq -r '.acrLoginServer.value' deployment_outputs.json)" >> $GITHUB_ENV
           echo "API_URL=$(jq -r '.apiUrl.value' deployment_outputs.json)" >> $GITHUB_ENV
           echo "WEB_URL=$(jq -r '.webUrl.value' deployment_outputs.json)" >> $GITHUB_ENV
-          # derive ACR name from login server
-          echo "ACR_NAME=$(echo $ACR_LOGIN_SERVER | sed 's/\.azurecr\.io$//')" >> $GITHUB_ENV
+          echo "ACR_NAME=$(jq -r '.acrLoginServer.value' deployment_outputs.json | sed 's/\.azurecr\.io$//')" >> $GITHUB_ENV
 
-      - name: Show tool versions
+      - name: Ensure AcrPull role assignments
         run: |
-          az version
-          docker version
-          jq --version
+          ACR_ID=$(az acr show --name "$ACR_NAME" --query id -o tsv)
+          API_SP=$(az webapp identity show --resource-group "$AZURE_RESOURCE_GROUP" --name "$APIAPP_NAME" --query principalId -o tsv)
+          WEB_SP=$(az webapp identity show --resource-group "$AZURE_RESOURCE_GROUP" --name "$WEBAPP_NAME" --query principalId -o tsv)
+          # These are idempotent — no error if already assigned
+          az role assignment create --assignee "$API_SP" --role AcrPull --scope "$ACR_ID" 2>/dev/null || echo "API AcrPull role already assigned"
+          az role assignment create --assignee "$WEB_SP" --role AcrPull --scope "$ACR_ID" 2>/dev/null || echo "Web AcrPull role already assigned"
 
       - name: Login to ACR
         run: |
@@ -96,16 +98,3 @@ jobs:
         run: |
           az webapp restart --resource-group "$AZURE_RESOURCE_GROUP" --name "$WEBAPP_NAME"
           az webapp restart --resource-group "$AZURE_RESOURCE_GROUP" --name "$APIAPP_NAME"
-
-      - name: Verify AcrPull role assignments
-        continue-on-error: true
-        run: |
-          ACR_ID=$(az acr show --name "$ACR_NAME" --query id -o tsv)
-          API_SP=$(az webapp identity show --resource-group "$AZURE_RESOURCE_GROUP" --name "$APIAPP_NAME" --query principalId -o tsv)
-          WEB_SP=$(az webapp identity show --resource-group "$AZURE_RESOURCE_GROUP" --name "$WEBAPP_NAME" --query principalId -o tsv)
-          echo "API principal: $API_SP"
-          echo "WEB principal: $WEB_SP"
-          echo "API AcrPull:"
-          az role assignment list --scope "$ACR_ID" --assignee "$API_SP" --query "[?roleDefinitionName=='AcrPull']"
-          echo "WEB AcrPull:"
-          az role assignment list --scope "$ACR_ID" --assignee "$WEB_SP" --query "[?roleDefinitionName=='AcrPull']"

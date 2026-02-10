@@ -15,9 +15,6 @@ var apiAppName = '${baseName}-api'
 var webAppName = '${baseName}-web'
 var redisName = toLower('${baseName}-redis')
 
-// Role definition ID for AcrPull
-var acrPullRoleDefinitionId = subscriptionResourceId('Microsoft.Authorization/roleDefinitions', '7f951dda-4ed3-4680-a7ca-43fe172d538d')
-
 // ACR
 resource acr 'Microsoft.ContainerRegistry/registries@2023-07-01' = {
   name: acrName
@@ -127,17 +124,6 @@ resource apiApp 'Microsoft.Web/sites@2022-09-01' = {
   dependsOn: [plan, acr, cosmos]
 }
 
-// Role assignment for backend to pull from ACR
-resource apiAppAcrPull 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
-  name: guid(acr.id, apiApp.id, acrPullRoleDefinitionId)
-  scope: acr
-  properties: {
-    principalId: apiApp.identity.principalId
-    roleDefinitionId: acrPullRoleDefinitionId
-    principalType: 'ServicePrincipal'
-  }
-}
-
 // Frontend Web App (container)
 resource webApp 'Microsoft.Web/sites@2022-09-01' = {
   name: webAppName
@@ -165,17 +151,6 @@ resource webApp 'Microsoft.Web/sites@2022-09-01' = {
     httpsOnly: true
   }
   dependsOn: [plan, acr]
-}
-
-// Role assignment for frontend to pull from ACR
-resource webAppAcrPull 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
-  name: guid(acr.id, webApp.id, acrPullRoleDefinitionId)
-  scope: acr
-  properties: {
-    principalId: webApp.identity.principalId
-    roleDefinitionId: acrPullRoleDefinitionId
-    principalType: 'ServicePrincipal'
-  }
 }
 
 // Outputs
