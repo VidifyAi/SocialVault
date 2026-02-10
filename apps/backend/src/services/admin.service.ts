@@ -331,16 +331,16 @@ class AdminService {
     ]);
 
     // Load sellers separately to avoid relation load errors from orphaned listings
-    const sellerIds = Array.from(new Set(listings.map((l) => l.sellerId)));
+    const sellerIds = Array.from(new Set(listings.map((l: any) => l.sellerId)));
     const sellers = await prisma.user.findMany({
       where: { id: { in: sellerIds } },
       select: { id: true, username: true, email: true, trustScore: true },
     });
-    const sellerMap = new Map(sellers.map((s) => [s.id, s]));
+    const sellerMap = new Map(sellers.map((s: any) => [s.id, s]));
 
     const listingsWithSeller = listings
-      .filter((l) => sellerMap.has(l.sellerId))
-      .map((l) => ({ ...l, seller: sellerMap.get(l.sellerId)! }));
+      .filter((l: any) => sellerMap.has(l.sellerId))
+      .map((l: any) => ({ ...l, seller: sellerMap.get(l.sellerId)! }));
 
     return {
       listings: listingsWithSeller,

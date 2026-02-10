@@ -211,10 +211,10 @@ export class MessageService {
       },
     });
 
-    return participations.map((p) => {
+    return participations.map((p: any) => {
       const otherParticipants = p.conversation.participants
-        .filter((part) => part.userId !== userId)
-        .map((part) => part.user);
+        .filter((part: any) => part.userId !== userId)
+        .map((part: any) => part.user);
 
       const lastMessage = p.conversation.messages[0];
       const hasUnread = lastMessage && !lastMessage.readBy.includes(userId);
@@ -343,7 +343,7 @@ export class MessageService {
 
     // Check if user is participant
     const isParticipant = conversation.participants.some(
-      (p) => p.userId === userId
+      (p: any) => p.userId === userId
     );
 
     if (!isParticipant) {
@@ -359,7 +359,7 @@ export class MessageService {
       select: { conversationId: true },
     });
 
-    const conversationIds = conversations.map((c) => c.conversationId);
+    const conversationIds = conversations.map((c: any) => c.conversationId);
 
     const unreadCount = await prisma.message.count({
       where: {

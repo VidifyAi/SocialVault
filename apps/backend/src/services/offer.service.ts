@@ -214,7 +214,7 @@ export class OfferService {
 
     if (action === 'accept') {
       // Use interactive transaction to prevent concurrent double-accept
-      const updatedOffer = await prisma.$transaction(async (tx) => {
+      const updatedOffer = await prisma.$transaction(async (tx: any) => {
         // Re-read offer inside transaction to get latest state
         const freshOffer = await tx.offer.findUnique({ where: { id } });
         if (!freshOffer || freshOffer.status !== 'pending') {

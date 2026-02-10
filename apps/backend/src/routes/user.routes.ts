@@ -151,7 +151,7 @@ router.get(
       });
 
       const totalEarnings = completedTransactions.reduce(
-        (sum, t) => sum + (t.sellerPayout || 0),
+        (sum: number, t: any) => sum + (t.sellerPayout || 0),
         0
       );
 

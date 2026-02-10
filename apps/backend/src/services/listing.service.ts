@@ -602,7 +602,7 @@ export class ListingService {
 
     const totalPages = Math.ceil(total / limit);
 
-    const sanitizedListings = listings.map((l) =>
+    const sanitizedListings = listings.map((l: any) =>
       sanitizeListingForPublic(l, filters.requestingUserId)
     );
 
@@ -750,7 +750,7 @@ export class ListingService {
       orderBy: { createdAt: 'desc' },
     });
 
-    return favorites.map((f) => ({
+    return favorites.map((f: any) => ({
       ...f.listing,
       favoritedAt: f.createdAt,
     }));
