@@ -1,15 +1,21 @@
 name: Deploy Infra and Apps
 
 on:
+  push:
+    branches: [main]
   workflow_dispatch:
     inputs:
       resourceGroup:
         description: 'Azure Resource Group name'
-        required: true
+        required: false
       baseName:
         description: 'Base name for resources (matches Bicep)'
         required: false
         default: 'socialswapr'
+
+env:
+  AZURE_RESOURCE_GROUP: ${{ github.event.inputs.resourceGroup || secrets.AZURE_RESOURCE_GROUP }}
+  BASE_NAME: ${{ github.event.inputs.baseName || 'socialswapr' }}
 
 jobs:
   deploy:
@@ -28,8 +34,6 @@ jobs:
 
       - name: Deploy infra (Bicep) and capture outputs
         env:
-          AZURE_RESOURCE_GROUP: ${{ github.event.inputs.resourceGroup }}
-          BASE_NAME: ${{ github.event.inputs.baseName }}
           FRONTEND_URL: ${{ secrets.FRONTEND_URL }}
           API_BASE_URL: ${{ secrets.API_BASE_URL }}
         run: |
@@ -49,7 +53,7 @@ jobs:
           echo "API_URL=$(jq -r '.apiUrl.value' deployment_outputs.json)" >> $GITHUB_ENV
           echo "WEB_URL=$(jq -r '.webUrl.value' deployment_outputs.json)" >> $GITHUB_ENV
           # derive ACR name from login server
-          echo "ACR_NAME=$(echo $ACR_LOGIN_SERVER | sed 's/\\.azurecr\\.io$//')" >> $GITHUB_ENV
+          echo "ACR_NAME=$(echo $ACR_LOGIN_SERVER | sed 's/\.azurecr\.io$//')" >> $GITHUB_ENV
 
       - name: Show tool versions
         run: |
@@ -89,15 +93,11 @@ jobs:
           docker push "$ACR_LOGIN_SERVER/frontend:latest"
 
       - name: Restart web apps
-        env:
-          AZURE_RESOURCE_GROUP: ${{ github.event.inputs.resourceGroup }}
         run: |
           az webapp restart --resource-group "$AZURE_RESOURCE_GROUP" --name "$WEBAPP_NAME"
           az webapp restart --resource-group "$AZURE_RESOURCE_GROUP" --name "$APIAPP_NAME"
 
       - name: Verify AcrPull role assignments
-        env:
-          AZURE_RESOURCE_GROUP: ${{ github.event.inputs.resourceGroup }}
         continue-on-error: true
         run: |
           ACR_ID=$(az acr show --name "$ACR_NAME" --query id -o tsv)
